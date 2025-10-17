@@ -195,6 +195,37 @@ def dashboard():
     )
     grafico_faturamento_resultado = grafico_faturamento_query.all()
 
+    grafico_gastos_query = (
+        apply_date_filter(
+            db.session.query(func.date(Gasto.data), func.sum(Gasto.valor)),
+            Gasto.data,
+        )
+        .group_by(func.date(Gasto.data))
+        .order_by(func.date(Gasto.data))
+    )
+    grafico_gastos_resultado = grafico_gastos_query.all()
+
+    grafico_pagamentos_query = (
+        apply_date_filter(
+            db.session.query(Pedido.metodo_pagamento, func.count(Pedido.id)),
+            Pedido.data_pagamento,
+        )
+        .filter(Pedido.status == 'Pago')
+        .group_by(Pedido.metodo_pagamento)
+        .order_by(Pedido.metodo_pagamento)
+    )
+    grafico_pagamentos_resultado = grafico_pagamentos_query.all()
+
+    grafico_categorias_query = (
+        apply_date_filter(
+            db.session.query(Gasto.categoria, func.sum(Gasto.valor)),
+            Gasto.data,
+        )
+        .group_by(Gasto.categoria)
+        .order_by(Gasto.categoria)
+    )
+    grafico_categorias_resultado = grafico_categorias_query.all()
+
     def _formata_label(valor):
         if isinstance(valor, datetime):
             return valor.strftime('%d/%m')
@@ -210,6 +241,21 @@ def dashboard():
     grafico_labels = [_formata_label(item[0]) for item in grafico_faturamento_resultado]
     grafico_data = [float(item[1]) for item in grafico_faturamento_resultado]
 
+    grafico_gastos_labels = [
+        _formata_label(item[0]) for item in grafico_gastos_resultado
+    ]
+    grafico_gastos_data = [float(item[1]) for item in grafico_gastos_resultado]
+
+    grafico_pagamentos_labels = [
+        (item[0] or 'Não informado') for item in grafico_pagamentos_resultado
+    ]
+    grafico_pagamentos_data = [int(item[1]) for item in grafico_pagamentos_resultado]
+
+    grafico_categorias_labels = [
+        (item[0] or 'Não informado') for item in grafico_categorias_resultado
+    ]
+    grafico_categorias_data = [float(item[1]) for item in grafico_categorias_resultado]
+
     # ... (calcular dados para outros gráficos de forma similar) ...
 
     # Adicionar dados dos gráficos ao contexto
@@ -223,6 +269,12 @@ def dashboard():
         "titulo_periodo": titulo_periodo,
         "grafico_labels": grafico_labels,
         "grafico_data": grafico_data,
+        "grafico_gastos_labels": grafico_gastos_labels,
+        "grafico_gastos_data": grafico_gastos_data,
+        "grafico_pagamentos_labels": grafico_pagamentos_labels,
+        "grafico_pagamentos_data": grafico_pagamentos_data,
+        "grafico_categorias_labels": grafico_categorias_labels,
+        "grafico_categorias_data": grafico_categorias_data,
         # ... (passar dados dos outros gráficos) ...
     }
 
