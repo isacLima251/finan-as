@@ -52,18 +52,19 @@ def dashboard():
         'projecao': total_pago + total_a_receber + total_agendado
     }
 
+    dia_pagamento = func.date(Pedido.data_pagamento)
     faturamento_query = db.session.query(
-        func.date(Pedido.data_pagamento).label('dia'),
+        dia_pagamento.label('dia'),
         func.sum(Pedido.valor).label('total')
     ).filter(
         Pedido.status == 'Pago',
         Pedido.data_pagamento.isnot(None)
     )
     faturamento_query = apply_date_filter(faturamento_query, Pedido.data_pagamento)
-    faturamento_por_dia = faturamento_query.group_by(func.date(Pedido.data_pagamento)).order_by(func.date(Pedido.data_pagamento)).all()
+    faturamento_por_dia = faturamento_query.group_by(dia_pagamento).order_by(dia_pagamento).all()
 
     grafico_labels = []
-    grafico_valores = []
+    grafico_data = []
     for dia, total in faturamento_por_dia:
         if isinstance(dia, datetime):
             dia_formatado = dia.strftime('%d/%m/%Y')
@@ -75,7 +76,10 @@ def dashboard():
             except ValueError:
                 dia_formatado = str(dia)
         grafico_labels.append(dia_formatado)
-        grafico_valores.append(float(total or 0))
+        grafico_data.append(float(total or 0))
+
+    print("grafico_labels:", grafico_labels)
+    print("grafico_data:", grafico_data)
 
     return render_template(
         "dashboard.html",
@@ -84,7 +88,7 @@ def dashboard():
         data_inicio=data_inicio_str,
         data_fim=data_fim_str,
         grafico_labels=grafico_labels,
-        grafico_valores=grafico_valores
+        grafico_data=grafico_data
     )
 
 
