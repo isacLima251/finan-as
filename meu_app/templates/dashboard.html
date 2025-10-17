@@ -138,7 +138,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const ctx = document.getElementById('graficoFaturamento');
     if (ctx && typeof Chart !== 'undefined') {
         const faturamentoLabels = {{ grafico_labels|tojson }};
-        const faturamentoValores = {{ grafico_valores|tojson }};
+        const faturamentoValores = {{ grafico_data|tojson }};
+        console.log('Faturamento labels:', faturamentoLabels);
+        console.log('Faturamento valores:', faturamentoValores);
 
         new Chart(ctx, {
             type: 'bar',
