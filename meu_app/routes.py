@@ -192,7 +192,20 @@ def dashboard():
         .order_by(func.date(Pedido.data_pagamento))
     )
     grafico_faturamento_resultado = grafico_faturamento_query.all()
-    grafico_labels = [item[0].strftime('%d/%m') for item in grafico_faturamento_resultado]
+
+    def _formata_label(valor):
+        if isinstance(valor, datetime):
+            return valor.strftime('%d/%m')
+        if isinstance(valor, date):
+            return valor.strftime('%d/%m')
+        if isinstance(valor, str):
+            try:
+                return datetime.strptime(valor, '%Y-%m-%d').strftime('%d/%m')
+            except ValueError:
+                return valor
+        return str(valor)
+
+    grafico_labels = [_formata_label(item[0]) for item in grafico_faturamento_resultado]
     grafico_data = [float(item[1]) for item in grafico_faturamento_resultado]
 
     # ... (calcular dados para outros gráficos de forma similar) ...
