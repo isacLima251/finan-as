@@ -78,8 +78,51 @@ def dashboard():
         grafico_labels.append(dia_formatado)
         grafico_data.append(float(total or 0))
 
+    dia_gasto = func.date(Gasto.data)
+    gastos_query = db.session.query(
+        dia_gasto.label('dia'),
+        func.sum(Gasto.valor).label('total')
+    )
+    gastos_query = apply_date_filter(gastos_query, Gasto.data)
+    gastos_por_dia = gastos_query.group_by(dia_gasto).order_by(dia_gasto).all()
+
+    grafico_gastos_labels = []
+    grafico_gastos_data = []
+    for dia, total in gastos_por_dia:
+        if isinstance(dia, datetime):
+            dia_formatado = dia.strftime('%d/%m/%Y')
+        elif isinstance(dia, date):
+            dia_formatado = dia.strftime('%d/%m/%Y')
+        else:
+            try:
+                dia_formatado = datetime.strptime(str(dia), '%Y-%m-%d').strftime('%d/%m/%Y')
+            except ValueError:
+                dia_formatado = str(dia)
+        grafico_gastos_labels.append(dia_formatado)
+        grafico_gastos_data.append(float(total or 0))
+
+    pagamentos_query = db.session.query(
+        Pedido.metodo_pagamento,
+        func.count(Pedido.id)
+    ).filter(
+        Pedido.status == 'Pago',
+        Pedido.data_pagamento.isnot(None)
+    )
+    pagamentos_query = apply_date_filter(pagamentos_query, Pedido.data_pagamento)
+    pagamentos_por_metodo = pagamentos_query.group_by(Pedido.metodo_pagamento).all()
+
+    grafico_pagamentos_labels = []
+    grafico_pagamentos_data = []
+    for metodo, quantidade in pagamentos_por_metodo:
+        grafico_pagamentos_labels.append(metodo or 'Não informado')
+        grafico_pagamentos_data.append(int(quantidade or 0))
+
     print("grafico_labels:", grafico_labels)
     print("grafico_data:", grafico_data)
+    print("grafico_gastos_labels:", grafico_gastos_labels)
+    print("grafico_gastos_data:", grafico_gastos_data)
+    print("grafico_pagamentos_labels:", grafico_pagamentos_labels)
+    print("grafico_pagamentos_data:", grafico_pagamentos_data)
 
     return render_template(
         "dashboard.html",
@@ -88,7 +131,11 @@ def dashboard():
         data_inicio=data_inicio_str,
         data_fim=data_fim_str,
         grafico_labels=grafico_labels,
-        grafico_data=grafico_data
+        grafico_data=grafico_data,
+        grafico_gastos_labels=grafico_gastos_labels,
+        grafico_gastos_data=grafico_gastos_data,
+        grafico_pagamentos_labels=grafico_pagamentos_labels,
+        grafico_pagamentos_data=grafico_pagamentos_data
     )
 
 
@@ -145,14 +192,24 @@ def webhook_braip():
     if not trans_code: return jsonify({"status": "erro", "mensagem": "Código da transação ausente"}), 400
     pedido_existente = Pedido.query.filter_by(braip_trans_code=trans_code).first()
     status_braip = dados.get('status_compra_descricao')
+    metodo_pagamento_braip = dados.get('metodo_pagamento') or dados.get('forma_pagamento') or dados.get('forma_pagamento_desc')
     if pedido_existente:
         pedido = pedido_existente
         if status_braip == 'Entregue': pedido.status = 'A Receber'; pedido.data_vencimento = datetime.utcnow() + timedelta(days=30)
         elif status_braip == 'Pagamento Confirmado': pedido.status = 'Pago'; pedido.data_pagamento = datetime.utcnow()
         elif status_braip in ['Estornado', 'Recusado', 'Cancelado']: pedido.status = 'Frustrado'
+        if metodo_pagamento_braip:
+            pedido.metodo_pagamento = metodo_pagamento_braip
     else:
         if status_braip != 'Aprovada': return jsonify({"status": "ok"}), 200
-        pedido = Pedido(braip_trans_code=trans_code, cliente=dados.get('nome_cliente'), telefone=dados.get('cel_cliente'), valor=float(dados.get('valor_total')), status='Agendado')
+        pedido = Pedido(
+            braip_trans_code=trans_code,
+            cliente=dados.get('nome_cliente'),
+            telefone=dados.get('cel_cliente'),
+            valor=float(dados.get('valor_total')),
+            status='Agendado',
+            metodo_pagamento=metodo_pagamento_braip
+        )
         db.session.add(pedido)
     db.session.commit()
     return jsonify({"status": "sucesso"}), 200
@@ -166,13 +223,14 @@ def listar_despesas():
 @app.route('/adicionar_gasto', methods=['POST'])
 def adicionar_gasto():
     valor_gasto = request.form.get('valor_gasto')
+    categoria = request.form.get('categoria')
     if valor_gasto:
         try:
             valor_normalizado = float(str(valor_gasto).replace(',', '.'))
         except ValueError:
             return redirect(url_for('listar_despesas'))
 
-        novo_gasto = Gasto(valor=valor_normalizado)
+        novo_gasto = Gasto(valor=valor_normalizado, categoria=categoria)
         db.session.add(novo_gasto)
         db.session.commit()
     return redirect(url_for('listar_despesas'))

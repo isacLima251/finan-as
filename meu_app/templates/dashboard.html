@@ -103,11 +103,38 @@
         </div>
     </div>
 
-    <div class="card mb-4">
-        <div class="card-body">
-            <h5 class="card-title mb-3">Faturamento por Dia</h5>
-            <div class="position-relative" style="height: 320px;">
-                <canvas id="graficoFaturamento"></canvas>
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Faturamento por Dia</h5>
+                    <div class="position-relative" style="height: 320px;">
+                        <canvas id="graficoFaturamento"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Gastos por Dia</h5>
+                    <div class="position-relative" style="height: 320px;">
+                        <canvas id="graficoGastos"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6 col-xl-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Vendas por Método de Pagamento</h5>
+                    <div class="position-relative" style="height: 320px;">
+                        <canvas id="graficoPagamentos"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -135,14 +162,14 @@ document.addEventListener('DOMContentLoaded', function() {
         selectPeriodo.addEventListener('change', toggleCamposPersonalizados);
     }
 
-    const ctx = document.getElementById('graficoFaturamento');
-    if (ctx && typeof Chart !== 'undefined') {
+    const ctxFaturamento = document.getElementById('graficoFaturamento');
+    if (ctxFaturamento && typeof Chart !== 'undefined') {
         const faturamentoLabels = {{ grafico_labels|tojson }};
         const faturamentoValores = {{ grafico_data|tojson }};
         console.log('Faturamento labels:', faturamentoLabels);
         console.log('Faturamento valores:', faturamentoValores);
 
-        new Chart(ctx, {
+        new Chart(ctxFaturamento, {
             type: 'bar',
             data: {
                 labels: faturamentoLabels,
@@ -184,6 +211,101 @@ document.addEventListener('DOMContentLoaded', function() {
                                 return 'R$ ' + valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
                             }
                         }
+                    }
+                }
+            }
+        });
+    }
+
+    const ctxGastos = document.getElementById('graficoGastos');
+    if (ctxGastos && typeof Chart !== 'undefined') {
+        const gastosLabels = {{ grafico_gastos_labels|tojson }};
+        const gastosValores = {{ grafico_gastos_data|tojson }};
+        console.log('Gastos labels:', gastosLabels);
+        console.log('Gastos valores:', gastosValores);
+
+        new Chart(ctxGastos, {
+            type: 'bar',
+            data: {
+                labels: gastosLabels,
+                datasets: [{
+                    label: 'Gastos (R$)',
+                    data: gastosValores,
+                    backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                    borderColor: 'rgba(220, 53, 69, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    maxBarThickness: 40
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return 'R$ ' + value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Gastos diários registrados'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const valor = context.parsed.y || 0;
+                                return 'R$ ' + valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    const ctxPagamentos = document.getElementById('graficoPagamentos');
+    if (ctxPagamentos && typeof Chart !== 'undefined') {
+        const pagamentoLabels = {{ grafico_pagamentos_labels|tojson }};
+        const pagamentoValores = {{ grafico_pagamentos_data|tojson }};
+        console.log('Pagamentos labels:', pagamentoLabels);
+        console.log('Pagamentos valores:', pagamentoValores);
+
+        new Chart(ctxPagamentos, {
+            type: 'doughnut',
+            data: {
+                labels: pagamentoLabels,
+                datasets: [{
+                    label: 'Pedidos pagos',
+                    data: pagamentoValores,
+                    backgroundColor: [
+                        'rgba(13, 110, 253, 0.7)',
+                        'rgba(25, 135, 84, 0.7)',
+                        'rgba(255, 193, 7, 0.7)',
+                        'rgba(220, 53, 69, 0.7)',
+                        'rgba(102, 16, 242, 0.7)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Distribuição de pedidos pagos por método'
                     }
                 }
             }
