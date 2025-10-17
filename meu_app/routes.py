@@ -1,30 +1,11 @@
 from flask import render_template, request, jsonify, redirect, url_for
-from sqlalchemy import func, extract, or_
+from sqlalchemy import func, or_
 from datetime import datetime, timedelta, date
 from meu_app import app, db
 from meu_app.models import Pedido, Gasto
 
 @app.route("/")
-def painel():
-    page = request.args.get('page', 1, type=int)
-    PER_PAGE = 15
-
-    # Lógica de Filtros da Tabela (sem alterações)
-    status_filtro = request.args.get('status')
-    termo_busca = request.args.get('busca')
-    query = Pedido.query
-    if status_filtro:
-        if status_filtro == 'Atrasado': query = query.filter(Pedido.status == 'A Receber', Pedido.data_vencimento < datetime.utcnow())
-        else: query = query.filter(Pedido.status == status_filtro)
-    if termo_busca: query = query.filter(or_(Pedido.cliente.ilike(f'%{termo_busca}%'), Pedido.telefone.ilike(f'%{termo_busca}%')))
-    
-    pagination = query.order_by(Pedido.data_venda.desc()).paginate(page=page, per_page=PER_PAGE, error_out=False)
-    pedidos_da_pagina = pagination.items
-
-    for pedido in pedidos_da_pagina:
-        if pedido.status == 'A Receber' and pedido.data_vencimento and pedido.data_vencimento < datetime.utcnow():
-            pedido.status = 'Atrasado'
-
+def dashboard():
     # LÓGICA DE PERÍODO ATUALIZADA PARA O RESUMO
     periodo_selecionado = request.args.get('periodo', 'mes_atual')
     hoje = date.today()
@@ -97,15 +78,50 @@ def painel():
         grafico_valores.append(float(total or 0))
 
     return render_template(
-        "painel.html",
-        pedidos=pedidos_da_pagina,
-        pagination=pagination,
+        "dashboard.html",
         resumo=resumo_dados,
         periodo_selecionado=periodo_selecionado,
         data_inicio=data_inicio_str,
         data_fim=data_fim_str,
         grafico_labels=grafico_labels,
         grafico_valores=grafico_valores
+    )
+
+
+@app.route("/pedidos")
+def listar_pedidos():
+    page = request.args.get('page', 1, type=int)
+    PER_PAGE = 15
+
+    status_filtro = request.args.get('status')
+    termo_busca = request.args.get('busca')
+    query = Pedido.query
+
+    if status_filtro:
+        if status_filtro == 'Atrasado':
+            query = query.filter(Pedido.status == 'A Receber', Pedido.data_vencimento < datetime.utcnow())
+        else:
+            query = query.filter(Pedido.status == status_filtro)
+
+    if termo_busca:
+        query = query.filter(or_(
+            Pedido.cliente.ilike(f'%{termo_busca}%'),
+            Pedido.telefone.ilike(f'%{termo_busca}%')
+        ))
+
+    pagination = query.order_by(Pedido.data_venda.desc()).paginate(page=page, per_page=PER_PAGE, error_out=False)
+    pedidos_da_pagina = pagination.items
+
+    for pedido in pedidos_da_pagina:
+        if pedido.status == 'A Receber' and pedido.data_vencimento and pedido.data_vencimento < datetime.utcnow():
+            pedido.status = 'Atrasado'
+
+    return render_template(
+        "pedidos.html",
+        pedidos=pedidos_da_pagina,
+        pagination=pagination,
+        status_filtro=status_filtro,
+        termo_busca=termo_busca
     )
 
 # --- Restante do arquivo (rotas de salvar, webhook, etc.) sem alterações ---
@@ -115,7 +131,7 @@ def salvar_observacao(pedido_id):
     nova_observacao = request.form.get('observacao')
     pedido.observacao = nova_observacao
     db.session.commit()
-    return redirect(url_for('painel'))
+    return redirect(url_for('listar_pedidos'))
 
 @app.route("/webhooks/braip", methods=['POST'])
 def webhook_braip():
@@ -137,13 +153,25 @@ def webhook_braip():
     db.session.commit()
     return jsonify({"status": "sucesso"}), 200
 
+@app.route('/despesas')
+def listar_despesas():
+    gastos = Gasto.query.order_by(Gasto.data.desc()).all()
+    return render_template('despesas.html', gastos=gastos)
+
+
 @app.route('/adicionar_gasto', methods=['POST'])
 def adicionar_gasto():
     valor_gasto = request.form.get('valor_gasto')
     if valor_gasto:
-        novo_gasto = Gasto(valor=float(valor_gasto.replace(',', '.')))
-        db.session.add(novo_gasto); db.session.commit()
-    return redirect(url_for('painel'))
+        try:
+            valor_normalizado = float(str(valor_gasto).replace(',', '.'))
+        except ValueError:
+            return redirect(url_for('listar_despesas'))
+
+        novo_gasto = Gasto(valor=valor_normalizado)
+        db.session.add(novo_gasto)
+        db.session.commit()
+    return redirect(url_for('listar_despesas'))
 
 @app.route('/atualizar_status/<int:pedido_id>', methods=['POST'])
 def atualizar_status(pedido_id):
