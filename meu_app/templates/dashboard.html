@@ -1,376 +1,242 @@
 {% extends "base.html" %}
 
-{% block title %}Resumo | Meu Negócio{% endblock %}
-
 {% block content %}
-<div class="container-fluid">
-    <div class="card mb-4">
-        <div class="card-body">
-            <form action="{{ url_for('dashboard') }}" method="GET" id="form-periodo" class="row g-3 align-items-end">
-                <div class="col-md-3">
-                    <label for="select-periodo" class="form-label">Período de Visualização</label>
-                    <select class="form-select" id="select-periodo" name="periodo">
-                        <option value="hoje" {% if periodo_selecionado == 'hoje' %}selected{% endif %}>Hoje</option>
-                        <option value="ontem" {% if periodo_selecionado == 'ontem' %}selected{% endif %}>Ontem</option>
-                        <option value="ultimos_7_dias" {% if periodo_selecionado == 'ultimos_7_dias' %}selected{% endif %}>Últimos 7 dias</option>
-                        <option value="mes_atual" {% if periodo_selecionado == 'mes_atual' %}selected{% endif %}>Esse mês</option>
-                        <option value="mes_passado" {% if periodo_selecionado == 'mes_passado' %}selected{% endif %}>Mês passado</option>
-                        <option value="maximo" {% if periodo_selecionado == 'maximo' %}selected{% endif %}>Máximo</option>
-                        <option value="personalizado" {% if periodo_selecionado == 'personalizado' %}selected{% endif %}>Personalizado</option>
-                    </select>
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form action="{{ url_for('dashboard') }}" method="GET" id="form-periodo" class="row g-3 align-items-end">
+            <div class="col-md-auto">
+                <label for="select-periodo" class="form-label">Período de Visualização</label>
+                <select class="form-select" id="select-periodo" name="periodo" style="min-width: 150px;">
+                    <option value="hoje" {% if periodo_selecionado == 'hoje' %}selected{% endif %}>Hoje</option>
+                    <option value="ontem" {% if periodo_selecionado == 'ontem' %}selected{% endif %}>Ontem</option>
+                    <option value="ultimos_7_dias" {% if periodo_selecionado == 'ultimos_7_dias' %}selected{% endif %}>Últimos 7 dias</option>
+                    <option value="mes_atual" {% if periodo_selecionado == 'mes_atual' %}selected{% endif %}>Este Mês</option>
+                    <option value="mes_passado" {% if periodo_selecionado == 'mes_passado' %}selected{% endif %}>Mês Passado</option>
+                    <option value="maximo" {% if periodo_selecionado == 'maximo' %}selected{% endif %}>Máximo</option>
+                    <option value="personalizado" {% if periodo_selecionado == 'personalizado' %}selected{% endif %}>Personalizado</option>
+                </select>
+            </div>
+            <div id="campos-personalizados" class="col-md-auto d-none row g-2 align-items-end ms-1">
+                 <div class="col-auto">
+                    <label for="data_inicio" class="form-label" style="font-size: 0.9rem;">De:</label>
+                    <input type="date" class="form-control" id="data_inicio" name="data_inicio" value="{{ request.args.get('data_inicio', '') }}">
                 </div>
-                <div id="campos-personalizados" class="col-md-4 d-none row g-2 align-items-end">
-                    <div class="col-auto">
-                        <label for="data_inicio" class="form-label" style="font-size: 0.9rem;">De:</label>
-                        <input type="date" class="form-control" id="data_inicio" name="data_inicio" value="{{ data_inicio or '' }}">
-                    </div>
-                    <div class="col-auto">
-                        <label for="data_fim" class="form-label" style="font-size: 0.9rem;">Até:</label>
-                        <input type="date" class="form-control" id="data_fim" name="data_fim" value="{{ data_fim or '' }}">
-                    </div>
-                    <div class="col-auto">
-                        <button type="submit" class="btn btn-primary">Aplicar</button>
-                    </div>
+                <div class="col-auto">
+                    <label for="data_fim" class="form-label" style="font-size: 0.9rem;">Até:</label>
+                    <input type="date" class="form-control" id="data_fim" name="data_fim" value="{{ request.args.get('data_fim', '') }}">
                 </div>
-            </form>
+                <div class="col-auto">
+                     <button type="submit" class="btn btn-primary mt-3">Aplicar</button>
+                </div>
+            </div>
+            <div class="col-md-auto ms-md-auto text-md-end">
+                 <small class="text-muted" style="font-size: 0.8rem;">Exibindo dados para: {{ titulo_periodo }}</small>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-3 col-md-6">
+        <div class="card kpi-card shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="card-title d-flex justify-content-between">
+                    <span>Faturamento Líquido</span>
+                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Total Pago no período selecionado."></i>
+                </h6>
+                <p class="card-text text-primary">R$ {{ "%.2f"|format(resumo.faturamento_liquido|float) }}</p>
+            </div>
         </div>
     </div>
-
-    <div class="row g-4 mb-4">
-        <div class="col-lg-3 col-md-6">
-            <div class="card kpi-card">
-                <div class="card-body">
-                    <h6 class="card-title">Faturamento Líquido</h6>
-                    <p class="card-text text-primary">R$ {{ "%.2f"|format(resumo.pagos|float) }}</p>
-                </div>
+     <div class="col-lg-3 col-md-6">
+        <div class="card kpi-card shadow-sm h-100">
+            <div class="card-body">
+                 <h6 class="card-title d-flex justify-content-between">
+                    <span>GASTO</span>
+                     <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Total Gasto no período selecionado."></i>
+                </h6>
+                <p class="card-text text-danger">R$ {{ "%.2f"|format(resumo.gasto|float) }}</p>
             </div>
         </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card kpi-card">
-                <div class="card-body">
-                    <h6 class="card-title">💸 Total Gasto ({{ titulo_periodo }})</h6>
-                    <p class="card-text text-danger">R$ {{ "%.2f"|format(resumo.gastos|float) }}</p>
-                </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card kpi-card shadow-sm h-100">
+            <div class="card-body">
+                 <h6 class="card-title d-flex justify-content-between">
+                    <span>ROI</span>
+                     <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Retorno Sobre Investimento (Lucro / Gasto) no período."></i>
+                </h6>
+                <p class="card-text">{{ "%.2f"|format(resumo.roi|float) }}</p>
             </div>
         </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card kpi-card">
-                <div class="card-body">
-                    <h6 class="card-title">ROAS</h6>
-                    <p class="card-text">{{ "%.2f"|format(resumo.roas|float) }}</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card kpi-card">
-                <div class="card-body">
-                    <h6 class="card-title">📊 LUCRO ({{ titulo_periodo }})</h6>
-                    <p class="card-text text-success">R$ {{ "%.2f"|format(resumo.lucro|float) }}</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card kpi-card">
-                <div class="card-body">
-                    <h6 class="card-title">Vendas Pendentes</h6>
-                    <p class="card-text">R$ {{ "%.2f"|format(resumo.a_receber|float) }}</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card kpi-card">
-                <div class="card-body">
-                    <h6 class="card-title">Margem de Lucro</h6>
-                    <p class="card-text">{{ "%.1f"|format(resumo.margem|float) }}%</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card kpi-card">
-                <div class="card-body">
-                    <h6 class="card-title">Chargeback (Total)</h6>
-                    <p class="card-text">R$ {{ "%.2f"|format(resumo.frustrados|float) }}</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card kpi-card">
-                <div class="card-body">
-                    <h6 class="card-title">Qtd. Vendas (Pagas)</h6>
-                    <p class="card-text">{{ resumo.quantidade_vendas }}</p>
-                </div>
+    </div>
+     <div class="col-lg-3 col-md-6">
+        <div class="card kpi-card shadow-sm h-100">
+            <div class="card-body">
+                 <h6 class="card-title d-flex justify-content-between">
+                    <span>LUCRO</span>
+                     <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Faturamento Líquido - Gasto no período."></i>
+                </h6>
+                <p class="card-text text-success">R$ {{ "%.2f"|format(resumo.lucro|float) }}</p>
             </div>
         </div>
     </div>
 
-    <div class="row g-4 mb-4">
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title mb-3">Faturamento por Dia</h5>
-                    <div class="position-relative" style="height: 320px;">
-                        <canvas id="graficoFaturamento"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title mb-3">Gastos por Dia</h5>
-                    <div class="position-relative" style="height: 320px;">
-                        <canvas id="graficoGastos"></canvas>
-                    </div>
-                </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card kpi-card shadow-sm h-100">
+            <div class="card-body">
+                 <h6 class="card-title d-flex justify-content-between">
+                    <span>AGENDADO TOTAL</span>
+                     <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Valor total de todos os pedidos com status 'Agendado' (independente do período)."></i>
+                </h6>
+                <p class="card-text text-info">R$ {{ "%.2f"|format(resumo.agendado_total|float) }}</p>
             </div>
         </div>
     </div>
-
-    <div class="row g-4 mb-4">
-        <div class="col-lg-6 col-xl-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title mb-3">Vendas por Método de Pagamento</h5>
-                    <div class="position-relative" style="height: 320px;">
-                        <canvas id="graficoPagamentos"></canvas>
-                    </div>
-                </div>
-            </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card kpi-card shadow-sm h-100">
+            <div class="card-body">
+                 <h6 class="card-title d-flex justify-content-between">
+                    <span>FALTA RECEBER</span> <span class="badge bg-light text-primary ms-1">Período</span>
+                     <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Total 'A Receber' (não vencido) de vendas no período."></i>
+                </h6>
+                <p class="card-text">R$ {{ "%.2f"|format(resumo.falta_receber|float) }}</p> </div>
         </div>
-        <div class="col-lg-6 col-xl-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title mb-3">Gastos por Categoria</h5>
-                    <div class="position-relative" style="height: 320px;">
-                        <canvas id="graficoCategorias"></canvas>
-                    </div>
-                </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card kpi-card shadow-sm h-100">
+             <div class="card-body">
+                 <h6 class="card-title d-flex justify-content-between">
+                    <span>ATRASADOS</span> <span class="badge bg-light text-warning ms-1">Período</span>
+                     <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Total de pedidos vencidos originados no período."></i>
+                </h6>
+                <p class="card-text text-warning">R$ {{ "%.2f"|format(resumo.atrasados|float) }}</p> </div>
+        </div>
+    </div>
+     <div class="col-lg-3 col-md-6">
+        <div class="card kpi-card shadow-sm h-100">
+            <div class="card-body">
+                 <h6 class="card-title d-flex justify-content-between">
+                    <span>FRUTADO/CANCELADO</span>
+                     <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Total de pedidos frustrados/cancelados no período."></i>
+                </h6>
+                <p class="card-text">R$ {{ "%.2f"|format(resumo.frutado|float) }}</p>
             </div>
         </div>
     </div>
 </div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h6 class="card-title">Faturamento por Dia ({{ titulo_periodo }})</h6>
+                <canvas id="graficoFaturamento"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+         <div class="card shadow-sm">
+            <div class="card-body">
+                <h6 class="card-title">Gastos por Dia ({{ titulo_periodo }})</h6>
+                <canvas id="graficoGastos"></canvas> </div>
+        </div>
+    </div>
+     <div class="col-lg-6">
+         <div class="card shadow-sm">
+            <div class="card-body">
+                <h6 class="card-title">Gastos por Categoria ({{ titulo_periodo }})</h6>
+                <canvas id="graficoCategorias" style="max-height: 300px;"></canvas> </div>
+        </div>
+    </div>
+     <div class="col-lg-6">
+         <div class="card shadow-sm">
+            <div class="card-body">
+                <h6 class="card-title">Vendas por Pagamento ({{ titulo_periodo }})</h6>
+                <canvas id="graficoPagamentos" style="max-height: 300px;"></canvas> </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="obsModal" tabindex="-1"></div>
+
 {% endblock %}
 
-{% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const selectPeriodo = document.getElementById('select-periodo');
+    // Inicializa Tooltips do Bootstrap
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl)
+    })
+
+    // Lógica para mostrar/esconder campos de data personalizada
+    const seletorPeriodo = document.getElementById('select-periodo');
     const camposPersonalizados = document.getElementById('campos-personalizados');
-
     function toggleCamposPersonalizados() {
-        if (!selectPeriodo) return;
-        if (selectPeriodo.value === 'personalizado') {
-            camposPersonalizados.classList.remove('d-none');
-        } else {
-            camposPersonalizados.classList.add('d-none');
-        }
+        if (seletorPeriodo.value === 'personalizado') { camposPersonalizados.classList.remove('d-none'); }
+        else { camposPersonalizados.classList.add('d-none'); }
     }
-
-    if (selectPeriodo && camposPersonalizados) {
+    toggleCamposPersonalizados();
+    seletorPeriodo.addEventListener('change', function() {
+        if (this.value !== 'personalizado') { document.getElementById('form-periodo').submit(); }
         toggleCamposPersonalizados();
-        selectPeriodo.addEventListener('change', toggleCamposPersonalizados);
-    }
+    });
 
-    const ctxFaturamento = document.getElementById('graficoFaturamento');
-    if (ctxFaturamento && typeof Chart !== 'undefined') {
-        const faturamentoLabels = {{ grafico_labels|tojson }};
-        const faturamentoValores = {{ grafico_data|tojson }};
-        console.log('Faturamento labels:', faturamentoLabels);
-        console.log('Faturamento valores:', faturamentoValores);
+    // --- Configuração dos Gráficos ---
 
+    // Gráfico de Faturamento por Dia
+    const ctxFaturamento = document.getElementById('graficoFaturamento')?.getContext('2d');
+    if (ctxFaturamento) {
+        const graficoLabels = {{ grafico_labels|tojson }};
+        const graficoData = {{ grafico_data|tojson }};
         new Chart(ctxFaturamento, {
             type: 'bar',
             data: {
-                labels: faturamentoLabels,
+                labels: graficoLabels,
                 datasets: [{
-                    label: 'Faturamento (R$)',
-                    data: faturamentoValores,
-                    backgroundColor: 'rgba(13, 110, 253, 0.6)',
-                    borderColor: 'rgba(13, 110, 253, 1)',
-                    borderWidth: 1,
-                    borderRadius: 4,
-                    maxBarThickness: 40
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return 'R$ ' + value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-                            }
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    title: {
-                        display: true,
-                        text: 'Faturamento diário de pedidos pagos'
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const valor = context.parsed.y || 0;
-                                return 'R$ ' + valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    const ctxGastos = document.getElementById('graficoGastos');
-    if (ctxGastos && typeof Chart !== 'undefined') {
-        const gastosLabels = {{ grafico_gastos_labels|tojson }};
-        const gastosValores = {{ grafico_gastos_data|tojson }};
-        console.log('Gastos labels:', gastosLabels);
-        console.log('Gastos valores:', gastosValores);
-
-        new Chart(ctxGastos, {
-            type: 'bar',
-            data: {
-                labels: gastosLabels,
-                datasets: [{
-                    label: 'Gastos (R$)',
-                    data: gastosValores,
-                    backgroundColor: 'rgba(220, 53, 69, 0.6)',
-                    borderColor: 'rgba(220, 53, 69, 1)',
-                    borderWidth: 1,
-                    borderRadius: 4,
-                    maxBarThickness: 40
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return 'R$ ' + value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-                            }
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    title: {
-                        display: true,
-                        text: 'Gastos diários registrados'
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const valor = context.parsed.y || 0;
-                                return 'R$ ' + valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    const ctxPagamentos = document.getElementById('graficoPagamentos');
-    if (ctxPagamentos && typeof Chart !== 'undefined') {
-        const pagamentoLabels = {{ grafico_pagamentos_labels|tojson }};
-        const pagamentoValores = {{ grafico_pagamentos_data|tojson }};
-        console.log('Pagamentos labels:', pagamentoLabels);
-        console.log('Pagamentos valores:', pagamentoValores);
-
-        new Chart(ctxPagamentos, {
-            type: 'doughnut',
-            data: {
-                labels: pagamentoLabels,
-                datasets: [{
-                    label: 'Pedidos pagos',
-                    data: pagamentoValores,
-                    backgroundColor: [
-                        'rgba(13, 110, 253, 0.7)',
-                        'rgba(25, 135, 84, 0.7)',
-                        'rgba(255, 193, 7, 0.7)',
-                        'rgba(220, 53, 69, 0.7)',
-                        'rgba(102, 16, 242, 0.7)'
-                    ],
+                    label: 'Faturamento',
+                    data: graficoData,
+                    backgroundColor: 'rgba(54, 162, 235, 0.6)', // Azul
+                    borderColor: 'rgba(54, 162, 235, 1)',
                     borderWidth: 1
                 }]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
-                    },
-                    title: {
-                        display: true,
-                        text: 'Distribuição de pedidos pagos por método'
-                    }
-                }
-            }
+            options: { scales: { y: { beginAtZero: true } }, responsive: true, maintainAspectRatio: false }
         });
     }
 
-    const ctxCategorias = document.getElementById('graficoCategorias');
-    if (ctxCategorias && typeof Chart !== 'undefined') {
-        const categoriaLabels = {{ grafico_categorias_labels|tojson }};
-        const categoriaValores = {{ grafico_categorias_data|tojson }};
-        console.log('Categorias labels:', categoriaLabels);
-        console.log('Categorias valores:', categoriaValores);
-
-        new Chart(ctxCategorias, {
-            type: 'doughnut',
-            data: {
-                labels: categoriaLabels,
-                datasets: [{
-                    label: 'Gastos (R$)',
-                    data: categoriaValores,
-                    backgroundColor: [
-                        'rgba(13, 110, 253, 0.7)',
-                        'rgba(25, 135, 84, 0.7)',
-                        'rgba(255, 193, 7, 0.7)',
-                        'rgba(220, 53, 69, 0.7)',
-                        'rgba(102, 16, 242, 0.7)',
-                        'rgba(111, 66, 193, 0.7)',
-                        'rgba(32, 201, 151, 0.7)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
-                    },
-                    title: {
-                        display: true,
-                        text: 'Distribuição de gastos por categoria'
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const valor = context.parsed || 0;
-                                return `${context.label}: R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-                            }
-                        }
-                    }
-                }
-            }
-        });
+    // Gráfico de Gastos por Dia (ASSUMINDO QUE OS DADOS SÃO ENVIADOS DO BACKEND)
+    const ctxGastos = document.getElementById('graficoGastos')?.getContext('2d');
+    if (ctxGastos) {
+        // const graficoGastosLabels = {{ grafico_gastos_labels|tojson|default([]) }}; // Exemplo
+        // const graficoGastosData = {{ grafico_gastos_data|tojson|default([]) }};   // Exemplo
+        // new Chart(ctxGastos, { /* ... configuração ... */ });
+         // IMPLEMENTAR A CONFIGURAÇÃO DESTE GRÁFICO (similar ao de faturamento, mas com dados de gastos)
+         // Use cores diferentes, ex: vermelho 'rgba(255, 99, 132, 0.6)'
     }
+
+    // Gráfico de Gastos por Categoria (ASSUMINDO DADOS DO BACKEND)
+    const ctxCategorias = document.getElementById('graficoCategorias')?.getContext('2d');
+    if (ctxCategorias) {
+        // const graficoCategoriasLabels = {{ grafico_categorias_labels|tojson|default([]) }}; // Exemplo
+        // const graficoCategoriasData = {{ grafico_categorias_data|tojson|default([]) }};   // Exemplo
+        // new Chart(ctxCategorias, { type: 'doughnut', data: { /*...*/ }, options: { /*...*/ } });
+        // IMPLEMENTAR A CONFIGURAÇÃO DESTE GRÁFICO (tipo 'doughnut')
+    }
+
+    // Gráfico de Vendas por Pagamento (ASSUMINDO DADOS DO BACKEND)
+    const ctxPagamentos = document.getElementById('graficoPagamentos')?.getContext('2d');
+    if (ctxPagamentos) {
+        // const graficoPagamentosLabels = {{ grafico_pagamentos_labels|tojson|default([]) }}; // Exemplo
+        // const graficoPagamentosData = {{ grafico_pagamentos_data|tojson|default([]) }};   // Exemplo
+        // new Chart(ctxPagamentos, { type: 'doughnut', data: { /*...*/ }, options: { /*...*/ } });
+         // IMPLEMENTAR A CONFIGURAÇÃO DESTE GRÁFICO (tipo 'doughnut')
+    }
+
 });
 </script>
 {% endblock %}
