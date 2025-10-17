@@ -112,6 +112,12 @@ def dashboard():
         .scalar()
         or 0.0
     )
+    total_agendado_geral = (
+        db.session.query(func.sum(Pedido.valor))
+        .filter(Pedido.status == 'Agendado')
+        .scalar()
+        or 0.0
+    )
     total_pago = (
         apply_date_filter(db.session.query(func.sum(Pedido.valor)), Pedido.data_pagamento)
         .filter(Pedido.status == 'Pago')
@@ -158,6 +164,7 @@ def dashboard():
     # Dicionário final para o template
     resumo_dados = {
         'agendado': total_agendado,
+        'agendado_total': total_agendado_geral,
         'faturamento_liquido': total_pago,
         'gasto': total_gasto,
         'lucro': lucro,
