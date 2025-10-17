@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controle de Vendas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        body { background-color: #f8f9fa; }
+        .sidebar { background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .observacao-truncada { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <header class="p-3 mb-3 border-bottom bg-white">
+        <div class="container-fluid">
+            <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-lg-start">
+                <a href="/" class="d-flex align-items-center mb-2 mb-lg-0 text-dark text-decoration-none"><h4>Meu Negócio</h4></a>
+                <ul class="nav col-12 col-lg-auto me-lg-auto mb-2 justify-content-center mb-md-0 ms-4">
+                    <li><a href="#" class="nav-link px-2 link-secondary">Controle</a></li>
+                    <li><a href="#" class="nav-link px-2 link-dark">Integrações</a></li>
+                </ul>
+            </div>
+        </div>
+    </header>
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="sidebar">
+                    <h5 class="mb-3">Resumo</h5>
+                    <form action="/" method="GET" id="form-periodo" class="mb-4">
+                        <div class="mb-3">
+                            <label for="select-periodo" class="form-label text-muted">Período de Visualização</label>
+                            <select class="form-select" id="select-periodo" name="periodo">
+                                <option value="hoje" {% if periodo_selecionado == 'hoje' %}selected{% endif %}>Hoje</option>
+                                <option value="ontem" {% if periodo_selecionado == 'ontem' %}selected{% endif %}>Ontem</option>
+                                <option value="ultimos_7_dias" {% if periodo_selecionado == 'ultimos_7_dias' %}selected{% endif %}>Últimos 7 dias</option>
+                                <option value="mes_atual" {% if periodo_selecionado == 'mes_atual' %}selected{% endif %}>Esse mês</option>
+                                <option value="mes_passado" {% if periodo_selecionado == 'mes_passado' %}selected{% endif %}>Mês passado</option>
+                                <option value="personalizado" {% if periodo_selecionado == 'personalizado' %}selected{% endif %}>Personalizado</option>
+                            </select>
+                        </div>
+                        <div id="campos-personalizados" class="d-none">
+                            <div class="mb-2">
+                                <label for="data_inicio" class="form-label text-muted" style="font-size: 0.8rem;">De:</label>
+                                <input type="date" class="form-control form-control-sm" id="data_inicio" name="data_inicio" value="{{ request.args.get('data_inicio', '') }}">
+                            </div>
+                            <div class="mb-3">
+                                <label for="data_fim" class="form-label text-muted" style="font-size: 0.8rem;">Até:</label>
+                                <input type="date" class="form-control form-control-sm" id="data_fim" name="data_fim" value="{{ request.args.get('data_fim', '') }}">
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm w-100">Aplicar</button>
+                        </div>
+                    </form>
+                    <div class="list-group">
+                        <div class="list-group-item d-flex justify-content-between align-items-center"><span>📅 Agendado</span><span class="badge bg-info rounded-pill">R$ {{ "%.2f"|format(resumo.agendado|float) }}</span></div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center"><span>💰 A receber</span><span class="badge bg-primary rounded-pill">R$ {{ "%.2f"|format(resumo.a_receber|float) }}</span></div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center"><span>🟡 Atrasados</span><span class="badge bg-warning rounded-pill">R$ {{ "%.2f"|format(resumo.atrasados|float) }}</span></div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center"><span>🟢 Pagos</span><span class="badge bg-success rounded-pill">R$ {{ "%.2f"|format(resumo.pagos|float) }}</span></div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center"><span>🔴 Frustrados</span><span class="badge bg-danger rounded-pill">R$ {{ "%.2f"|format(resumo.frustrados|float) }}</span></div>
+                        <div class="list-group-item list-group-item-dark d-flex justify-content-between align-items-center"><strong>📈 Projeção</strong><strong>R$ {{ "%.2f"|format(resumo.projecao|float) }}</strong></div>
+                    </div>
+                    <hr>
+                    <h5 class="mt-4 mb-3">Controle de Gastos</h5>
+                    <form action="{{ url_for('adicionar_gasto') }}" method="POST">
+                        <div class="mb-3">
+                            <label for="gasto" class="form-label">💸 Adicionar Gasto Hoje</label>
+                            <div class="input-group"><span class="input-group-text">R$</span><input type="number" step="0.01" class="form-control" name="valor_gasto" placeholder="0.00" required></div>
+                        </div>
+                        <button type="submit" class="btn btn-secondary w-100">Salvar Gasto</button>
+                    </form>
+                    <div class="list-group mt-3"><div class="list-group-item d-flex justify-content-between align-items-center"><span>💸 Total Gasto (Período)</span><span class="badge bg-secondary rounded-pill">R$ {{ "%.2f"|format(resumo.gastos|float) }}</span></div></div>
+                    <div class="card bg-light mt-3"><div class="card-body text-center"><h6 class="card-title">📊 LUCRO (Período)</h6><p class="card-text h4 text-success"><strong>R$ {{ "%.2f"|format(resumo.lucro|float) }}</strong></p></div></div>
+                </div>
+            </div>
+            <div class="col-md-9">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
+                            <div class="btn-group" role="group"><a href="/" class="btn btn-outline-primary">Mostrar Todos</a><a href="/?status=Atrasado" class="btn btn-outline-warning">Apenas Atrasados</a><a href="/?status=Frustrado" class="btn btn-outline-danger">Apenas Frustrados</a></div>
+                            <form action="/" method="GET" class="d-flex" style="max-width: 300px;"><input type="text" class="form-control" name="busca" placeholder="Buscar por nome ou telefone..." value="{{ request.args.get('busca', '') }}"><button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button></form>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light"><tr><th>Data Venda</th><th>Cliente</th><th>Telefone</th><th>Valor</th><th>Status</th><th>Vencimento</th><th>Observação</th><th>Ações</th></tr></thead>
+                                <tbody>
+                                    {% for pedido in pedidos %}
+                                    <tr id="pedido-{{ pedido.id }}">
+                                        <td>{{ pedido.data_venda.strftime('%d/%m/%Y') }}</td>
+                                        <td>{{ pedido.cliente }}</td><td>{{ pedido.telefone }}</td>
+                                        <td>R$ {{ "%.2f"|format(pedido.valor|float) }}</td>
+                                        <td class="status-cell">
+                                            {% if pedido.status == 'Atrasado' %}<span class="badge bg-warning">Atrasado</span>
+                                            {% elif pedido.status == 'Pago' %}<span class="badge bg-success">Pago</span>
+                                            {% elif pedido.status == 'Frustrado' %}<span class="badge bg-danger">Frustrado</span>
+                                            {% elif pedido.status == 'Agendado' %}<span class="badge bg-info">Agendado</span>
+                                            {% else %}<span class="badge bg-primary">{{ pedido.status }}</span>{% endif %}
+                                        </td>
+                                        <td>{% if pedido.data_vencimento %}{{ pedido.data_vencimento.strftime('%d/%m/%Y') }}{% else %}-{% endif %}</td>
+                                        <td><div class="observacao-truncada" title="{{ pedido.observacao or '' }}">{{ pedido.observacao or '-' }}</div></td>
+                                        <td>
+                                            <button class="btn btn-success btn-sm btn-atualizar-status" title="Marcar como Pago" data-pedido-id="{{ pedido.id }}" data-novo-status="Pago"><i class="bi bi-check-lg"></i></button>
+                                            <button class="btn btn-danger btn-sm btn-atualizar-status" title="Marcar como Frustrado" data-pedido-id="{{ pedido.id }}" data-novo-status="Frustrado"><i class="bi bi-x-lg"></i></button>
+                                            <button class="btn btn-secondary btn-sm btn-editar-obs" title="Editar Observação" data-bs-toggle="modal" data-bs-target="#obsModal" data-pedido-id="{{ pedido.id }}" data-observacao="{{ pedido.observacao or '' }}"><i class="bi bi-pencil-square"></i></button>
+                                            <a href="https://wa.me/{{ pedido.telefone|replace('(', '')|replace(')', '')|replace('-', '')|replace(' ', '') }}" target="_blank" class="btn btn-info btn-sm text-white" title="Chamar no WhatsApp"><i class="bi bi-whatsapp"></i></a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <nav aria-label="Navegação das páginas">
+                          <ul class="pagination justify-content-center mt-4">
+                            <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                              <a class="page-link" href="{{ url_for('painel', page=pagination.prev_num, status=request.args.get('status'), busca=request.args.get('busca'), periodo=request.args.get('periodo'), data_inicio=request.args.get('data_inicio'), data_fim=request.args.get('data_fim')) }}">Anterior</a>
+                            </li>
+                            {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                              {% if page_num %}
+                                <li class="page-item {% if pagination.page == page_num %}active{% endif %}">
+                                  <a class="page-link" href="{{ url_for('painel', page=page_num, status=request.args.get('status'), busca=request.args.get('busca'), periodo=request.args.get('periodo'), data_inicio=request.args.get('data_inicio'), data_fim=request.args.get('data_fim')) }}">{{ page_num }}</a>
+                                </li>
+                              {% else %}
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                              {% endif %}
+                            {% endfor %}
+                            <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                              <a class="page-link" href="{{ url_for('painel', page=page_num, status=request.args.get('status'), busca=request.args.get('busca'), periodo=request.args.get('periodo'), data_inicio=request.args.get('data_inicio'), data_fim=request.args.get('data_fim')) }}">Próximo</a>
+                            </li>
+                          </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="obsModal" tabindex="-1" aria-labelledby="obsModalLabel" aria-hidden="true">
+      <div class="modal-dialog"><div class="modal-content">
+          <div class="modal-header"><h1 class="modal-title fs-5" id="obsModalLabel">Editar Observação</h1><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+          <form id="form-observacao" method="POST">
+              <div class="modal-body"><textarea class="form-control" id="textarea-observacao" name="observacao" rows="4"></textarea></div>
+              <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button><button type="submit" class="btn btn-primary">Salvar</button></div>
+          </form>
+      </div></div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // ... (todo o JavaScript existente e correto)
+        const botoesAtualizar = document.querySelectorAll('.btn-atualizar-status');
+        botoesAtualizar.forEach(botao => {
+            botao.addEventListener('click', function() {
+                fetch(`/atualizar_status/${this.dataset.pedidoId}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: this.dataset.novoStatus })
+                }).then(response => response.json()).then(data => { if (data.status === 'sucesso') { window.location.reload(); } else { alert('Erro: ' + data.mensagem); } })
+                .catch(error => { console.error('Erro:', error); alert('Erro de comunicação.'); });
+            });
+        });
+        const seletorPeriodo = document.getElementById('select-periodo');
+        const camposPersonalizados = document.getElementById('campos-personalizados');
+        function toggleCamposPersonalizados() {
+            if (seletorPeriodo.value === 'personalizado') { camposPersonalizados.classList.remove('d-none'); } 
+            else { camposPersonalizados.classList.add('d-none'); }
+        }
+        toggleCamposPersonalizados();
+        seletorPeriodo.addEventListener('change', function() {
+            if (this.value !== 'personalizado') { document.getElementById('form-periodo').submit(); }
+            toggleCamposPersonalizados();
+        });
+        const obsModal = document.getElementById('obsModal');
+        if (obsModal) {
+            obsModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const pedidoId = button.getAttribute('data-pedido-id');
+                const observacao = button.getAttribute('data-observacao');
+                const form = obsModal.querySelector('#form-observacao');
+                const textarea = obsModal.querySelector('#textarea-observacao');
+                form.action = `/salvar_observacao/${pedidoId}`;
+                textarea.value = observacao;
+            });
+        }
+    });
+    </script>
+</body>
+</html>
