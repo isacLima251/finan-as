@@ -63,15 +63,50 @@ def painel():
     roas = total_pago / total_gasto if total_gasto > 0 else 0
     margem = (lucro / total_pago) * 100 if total_pago > 0 else 0
 
-    resumo_dados = { 
+    resumo_dados = {
         'pagos': total_pago, 'gastos': total_gasto, 'lucro': lucro,
         'a_receber': total_a_receber, 'frustrados': total_frustrado, 'atrasados': total_atrasado,
         'agendado': total_agendado,
         'quantidade_vendas': quantidade_vendas, 'roas': roas, 'margem': margem,
         'projecao': total_pago + total_a_receber + total_agendado
     }
-    
-    return render_template("painel.html", pedidos=pedidos_da_pagina, pagination=pagination, resumo=resumo_dados, periodo_selecionado=periodo_selecionado, data_inicio=data_inicio_str, data_fim=data_fim_str)
+
+    faturamento_query = db.session.query(
+        func.date(Pedido.data_pagamento).label('dia'),
+        func.sum(Pedido.valor).label('total')
+    ).filter(
+        Pedido.status == 'Pago',
+        Pedido.data_pagamento.isnot(None)
+    )
+    faturamento_query = apply_date_filter(faturamento_query, Pedido.data_pagamento)
+    faturamento_por_dia = faturamento_query.group_by(func.date(Pedido.data_pagamento)).order_by(func.date(Pedido.data_pagamento)).all()
+
+    grafico_labels = []
+    grafico_valores = []
+    for dia, total in faturamento_por_dia:
+        if isinstance(dia, datetime):
+            dia_formatado = dia.strftime('%d/%m/%Y')
+        elif isinstance(dia, date):
+            dia_formatado = dia.strftime('%d/%m/%Y')
+        else:
+            try:
+                dia_formatado = datetime.strptime(str(dia), '%Y-%m-%d').strftime('%d/%m/%Y')
+            except ValueError:
+                dia_formatado = str(dia)
+        grafico_labels.append(dia_formatado)
+        grafico_valores.append(float(total or 0))
+
+    return render_template(
+        "painel.html",
+        pedidos=pedidos_da_pagina,
+        pagination=pagination,
+        resumo=resumo_dados,
+        periodo_selecionado=periodo_selecionado,
+        data_inicio=data_inicio_str,
+        data_fim=data_fim_str,
+        grafico_labels=grafico_labels,
+        grafico_valores=grafico_valores
+    )
 
 # --- Restante do arquivo (rotas de salvar, webhook, etc.) sem alterações ---
 @app.route('/salvar_observacao/<int:pedido_id>', methods=['POST'])
