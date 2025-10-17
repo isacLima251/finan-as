@@ -6,6 +6,7 @@
     <title>Dashboard de Controle</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <style>
         body { background-color: #f8f9fa; }
         .kpi-card { text-align: left; }
@@ -71,6 +72,13 @@
             <div class="col-lg-3 col-md-6"><div class="card kpi-card"><div class="card-body"><h6 class="card-title">Qtd. Vendas (Pagas)</h6><p class="card-text">{{ resumo.quantidade_vendas }}</p></div></div></div>
         </div>
 
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Faturamento por Dia</h5>
+                <canvas id="graficoFaturamento" height="120"></canvas>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-body">
                 <div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
@@ -128,6 +136,59 @@
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         // ... (todo o JavaScript existente e correto para toasts, seletor de período e modal de observação) ...
+
+        const ctx = document.getElementById('graficoFaturamento');
+        if (ctx && typeof Chart !== 'undefined') {
+            const faturamentoLabels = {{ grafico_labels|tojson }};
+            const faturamentoValores = {{ grafico_valores|tojson }};
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: faturamentoLabels,
+                    datasets: [{
+                        label: 'Faturamento (R$)',
+                        data: faturamentoValores,
+                        backgroundColor: 'rgba(13, 110, 253, 0.6)',
+                        borderColor: 'rgba(13, 110, 253, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        maxBarThickness: 40
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return 'R$ ' + value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Faturamento diário de pedidos pagos'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const valor = context.parsed.y || 0;
+                                    return 'R$ ' + valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
     });
     </script>
 </body>
