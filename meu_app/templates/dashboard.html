@@ -48,7 +48,7 @@
         <div class="col-lg-3 col-md-6">
             <div class="card kpi-card">
                 <div class="card-body">
-                    <h6 class="card-title">Gastos com Anúncios</h6>
+                    <h6 class="card-title">💸 Total Gasto ({{ titulo_periodo }})</h6>
                     <p class="card-text text-danger">R$ {{ "%.2f"|format(resumo.gastos|float) }}</p>
                 </div>
             </div>
@@ -64,7 +64,7 @@
         <div class="col-lg-3 col-md-6">
             <div class="card kpi-card">
                 <div class="card-body">
-                    <h6 class="card-title">Lucro</h6>
+                    <h6 class="card-title">📊 LUCRO ({{ titulo_periodo }})</h6>
                     <p class="card-text text-success">R$ {{ "%.2f"|format(resumo.lucro|float) }}</p>
                 </div>
             </div>
@@ -133,6 +133,16 @@
                     <h5 class="card-title mb-3">Vendas por Método de Pagamento</h5>
                     <div class="position-relative" style="height: 320px;">
                         <canvas id="graficoPagamentos"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6 col-xl-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Gastos por Categoria</h5>
+                    <div class="position-relative" style="height: 320px;">
+                        <canvas id="graficoCategorias"></canvas>
                     </div>
                 </div>
             </div>
@@ -306,6 +316,56 @@ document.addEventListener('DOMContentLoaded', function() {
                     title: {
                         display: true,
                         text: 'Distribuição de pedidos pagos por método'
+                    }
+                }
+            }
+        });
+    }
+
+    const ctxCategorias = document.getElementById('graficoCategorias');
+    if (ctxCategorias && typeof Chart !== 'undefined') {
+        const categoriaLabels = {{ grafico_categorias_labels|tojson }};
+        const categoriaValores = {{ grafico_categorias_data|tojson }};
+        console.log('Categorias labels:', categoriaLabels);
+        console.log('Categorias valores:', categoriaValores);
+
+        new Chart(ctxCategorias, {
+            type: 'doughnut',
+            data: {
+                labels: categoriaLabels,
+                datasets: [{
+                    label: 'Gastos (R$)',
+                    data: categoriaValores,
+                    backgroundColor: [
+                        'rgba(13, 110, 253, 0.7)',
+                        'rgba(25, 135, 84, 0.7)',
+                        'rgba(255, 193, 7, 0.7)',
+                        'rgba(220, 53, 69, 0.7)',
+                        'rgba(102, 16, 242, 0.7)',
+                        'rgba(111, 66, 193, 0.7)',
+                        'rgba(32, 201, 151, 0.7)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Distribuição de gastos por categoria'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const valor = context.parsed || 0;
+                                return `${context.label}: R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+                            }
+                        }
                     }
                 }
             }

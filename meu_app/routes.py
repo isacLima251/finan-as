@@ -25,6 +25,24 @@ def dashboard():
     else: # Padrão: 'mes_atual'
         primeiro_dia_mes_atual = hoje.replace(day=1); data_inicio = datetime.combine(primeiro_dia_mes_atual, datetime.min.time()); data_fim = datetime.combine(hoje, datetime.max.time())
 
+    if periodo_selecionado == 'hoje':
+        titulo_periodo = 'Hoje'
+    elif periodo_selecionado == 'ontem':
+        titulo_periodo = 'Ontem'
+    elif periodo_selecionado == 'ultimos_7_dias':
+        titulo_periodo = 'Últimos 7 dias'
+    elif periodo_selecionado == 'mes_passado':
+        titulo_periodo = 'Mês Passado'
+    elif periodo_selecionado == 'maximo':
+        titulo_periodo = 'Período Total'
+    elif periodo_selecionado == 'personalizado':
+        if data_inicio and data_fim:
+            titulo_periodo = f"{data_inicio.strftime('%d/%m/%Y')} - {data_fim.strftime('%d/%m/%Y')}"
+        else:
+            titulo_periodo = 'Personalizado'
+    else:
+        titulo_periodo = 'Mês Atual'
+
     def apply_date_filter(query, column):
         if data_inicio and data_fim:
             return query.filter(column.between(data_inicio, data_fim))
@@ -117,17 +135,33 @@ def dashboard():
         grafico_pagamentos_labels.append(metodo or 'Não informado')
         grafico_pagamentos_data.append(int(quantidade or 0))
 
+    categorias_query = db.session.query(
+        Gasto.categoria,
+        func.sum(Gasto.valor)
+    )
+    categorias_query = apply_date_filter(categorias_query, Gasto.data)
+    gastos_por_categoria = categorias_query.group_by(Gasto.categoria).all()
+
+    grafico_categorias_labels = []
+    grafico_categorias_data = []
+    for categoria, total in gastos_por_categoria:
+        grafico_categorias_labels.append(categoria or 'Não informado')
+        grafico_categorias_data.append(float(total or 0))
+
     print("grafico_labels:", grafico_labels)
     print("grafico_data:", grafico_data)
     print("grafico_gastos_labels:", grafico_gastos_labels)
     print("grafico_gastos_data:", grafico_gastos_data)
     print("grafico_pagamentos_labels:", grafico_pagamentos_labels)
     print("grafico_pagamentos_data:", grafico_pagamentos_data)
+    print("grafico_categorias_labels:", grafico_categorias_labels)
+    print("grafico_categorias_data:", grafico_categorias_data)
 
     return render_template(
         "dashboard.html",
         resumo=resumo_dados,
         periodo_selecionado=periodo_selecionado,
+        titulo_periodo=titulo_periodo,
         data_inicio=data_inicio_str,
         data_fim=data_fim_str,
         grafico_labels=grafico_labels,
@@ -135,7 +169,9 @@ def dashboard():
         grafico_gastos_labels=grafico_gastos_labels,
         grafico_gastos_data=grafico_gastos_data,
         grafico_pagamentos_labels=grafico_pagamentos_labels,
-        grafico_pagamentos_data=grafico_pagamentos_data
+        grafico_pagamentos_data=grafico_pagamentos_data,
+        grafico_categorias_labels=grafico_categorias_labels,
+        grafico_categorias_data=grafico_categorias_data
     )
 
 
