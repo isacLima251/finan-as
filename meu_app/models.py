@@ -14,9 +14,11 @@ class Pedido(db.Model):
     data_vencimento = db.Column(db.DateTime, nullable=True)
     data_pagamento = db.Column(db.DateTime, nullable=True)
     observacao = db.Column(db.String(300), nullable=True)
+    metodo_pagamento = db.Column(db.String(50), nullable=True)
 
 
 class Gasto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     valor = db.Column(db.Float, nullable=False)
     data = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    categoria = db.Column(db.String(80), nullable=True)
