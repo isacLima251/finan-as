@@ -153,6 +153,7 @@ def dashboard():
     # KPIs DERIVADOS (USAM VALORES DO PERÍODO)
     lucro = total_pago - total_gasto
     roi = (lucro / total_gasto) if total_gasto > 0 else 0
+    margem = (lucro / total_pago) * 100 if total_pago > 0 else 0
 
     # Dicionário final para o template
     resumo_dados = {
@@ -173,6 +174,7 @@ def dashboard():
         'roas': roi,
         'a_receber': total_a_receber,
         'frustrados': total_frustrado,
+        'margem': margem,
     }
 
     # Dados dos gráficos (exemplo para faturamento, adaptar para outros)
