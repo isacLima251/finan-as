@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Pedidos | Meu Negócio{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h1 class="h3 mb-0">Pedidos</h1>
+        <div class="btn-group" role="group">
+            <a href="{{ url_for('listar_pedidos') }}" class="btn btn-outline-secondary {% if not status_filtro %}active{% endif %}">Todos</a>
+            <a href="{{ url_for('listar_pedidos', status='Atrasado') }}" class="btn btn-outline-warning {% if status_filtro == 'Atrasado' %}active{% endif %}">Atrasados</a>
+            <a href="{{ url_for('listar_pedidos', status='Frustrado') }}" class="btn btn-outline-danger {% if status_filtro == 'Frustrado' %}active{% endif %}">Frustrados</a>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form action="{{ url_for('listar_pedidos') }}" method="GET" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="busca" class="form-label">Buscar</label>
+                    <div class="input-group">
+                        <input type="text" id="busca" name="busca" class="form-control" placeholder="Buscar por nome ou telefone..." value="{{ termo_busca or '' }}">
+                        <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label for="status" class="form-label">Status</label>
+                    <select name="status" id="status" class="form-select">
+                        <option value="" {% if not status_filtro %}selected{% endif %}>Todos</option>
+                        <option value="Pago" {% if status_filtro == 'Pago' %}selected{% endif %}>Pago</option>
+                        <option value="A Receber" {% if status_filtro == 'A Receber' %}selected{% endif %}>A Receber</option>
+                        <option value="Atrasado" {% if status_filtro == 'Atrasado' %}selected{% endif %}>Atrasado</option>
+                        <option value="Agendado" {% if status_filtro == 'Agendado' %}selected{% endif %}>Agendado</option>
+                        <option value="Frustrado" {% if status_filtro == 'Frustrado' %}selected{% endif %}>Frustrado</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Data Venda</th>
+                            <th>Cliente</th>
+                            <th>Telefone</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                            <th>Vencimento</th>
+                            <th>Observação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pedido in pedidos %}
+                        <tr>
+                            <td>{{ pedido.data_venda.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ pedido.cliente }}</td>
+                            <td>{{ pedido.telefone }}</td>
+                            <td>R$ {{ "%.2f"|format(pedido.valor|float) }}</td>
+                            <td class="status-cell">
+                                {% if pedido.status == 'Atrasado' %}
+                                <span class="badge bg-warning">Atrasado</span>
+                                {% elif pedido.status == 'Pago' %}
+                                <span class="badge bg-success">Pago</span>
+                                {% elif pedido.status == 'Frustrado' %}
+                                <span class="badge bg-danger">Frustrado</span>
+                                {% elif pedido.status == 'Agendado' %}
+                                <span class="badge bg-info">Agendado</span>
+                                {% else %}
+                                <span class="badge bg-primary">{{ pedido.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if pedido.data_vencimento %}
+                                    {{ pedido.data_vencimento.strftime('%d/%m/%Y') }}
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>
+                                <div class="observacao-truncada" title="{{ pedido.observacao or '' }}">{{ pedido.observacao or '-' }}</div>
+                            </td>
+                            <td>
+                                <button class="btn btn-success btn-sm btn-atualizar-status" title="Marcar como Pago" data-pedido-id="{{ pedido.id }}" data-novo-status="Pago"><i class="bi bi-check-lg"></i></button>
+                                <button class="btn btn-danger btn-sm btn-atualizar-status" title="Marcar como Frustrado" data-pedido-id="{{ pedido.id }}" data-novo-status="Frustrado"><i class="bi bi-x-lg"></i></button>
+                                <button class="btn btn-secondary btn-sm btn-editar-obs" title="Editar Observação" data-bs-toggle="modal" data-bs-target="#obsModal" data-pedido-id="{{ pedido.id }}" data-observacao="{{ pedido.observacao or '' }}"><i class="bi bi-pencil-square"></i></button>
+                                <a href="https://wa.me/{{ pedido.telefone|replace('(', '')|replace(')', '')|replace('-', '')|replace(' ', '') }}" target="_blank" class="btn btn-info btn-sm text-white" title="Chamar no WhatsApp"><i class="bi bi-whatsapp"></i></a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <nav aria-label="Navegação das páginas">
+                <ul class="pagination justify-content-center mt-4">
+                    <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('listar_pedidos', page=pagination.prev_num, status=request.args.get('status'), busca=request.args.get('busca')) }}">Anterior</a>
+                    </li>
+                    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                        {% if page_num %}
+                            <li class="page-item {% if pagination.page == page_num %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('listar_pedidos', page=page_num, status=request.args.get('status'), busca=request.args.get('busca')) }}">{{ page_num }}</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('listar_pedidos', page=pagination.next_num, status=request.args.get('status'), busca=request.args.get('busca')) }}">Próximo</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="obsModal" tabindex="-1" aria-hidden="true"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Scripts específicos da página de pedidos podem ser adicionados aqui.
+</script>
+{% endblock %}
