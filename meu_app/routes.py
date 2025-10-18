@@ -1,291 +1,167 @@
 from flask import render_template, request, jsonify, redirect, url_for
-from sqlalchemy import func, extract, or_
+from sqlalchemy import func, or_
 from datetime import datetime, timedelta, date
 from meu_app import app, db
 from meu_app.models import Pedido, Gasto
+import traceback  # Para depuração
 
 
 @app.route("/")
 def dashboard():
-    page = request.args.get('page', 1, type=int)
-    PER_PAGE = 15
+    try:  # Adicionado Try/Except para capturar erros inesperados
+        page = request.args.get('page', 1, type=int)
+        PER_PAGE = 15
 
-    # Lógica de Filtros da Tabela (sem alterações nesta missão)
-    status_filtro = request.args.get('status')
-    termo_busca = request.args.get('busca')
-    query_pedidos_tabela = Pedido.query  # Query separada para a tabela paginada
-    if status_filtro:
-        if status_filtro == 'Atrasado':
-            query_pedidos_tabela = query_pedidos_tabela.filter(
-                Pedido.status == 'A Receber',
-                Pedido.data_vencimento < datetime.utcnow(),
-            )
+        # Lógica de Filtros da Tabela (não afeta os KPIs do dashboard)
+        status_filtro_tabela = request.args.get('status')
+        termo_busca_tabela = request.args.get('busca')
+        query_pedidos_tabela = Pedido.query
+        if status_filtro_tabela:
+            if status_filtro_tabela == 'Atrasado':
+                query_pedidos_tabela = query_pedidos_tabela.filter(Pedido.status == 'A Receber', Pedido.data_vencimento < datetime.utcnow())
+            else:
+                query_pedidos_tabela = query_pedidos_tabela.filter(Pedido.status == status_filtro_tabela)
+        if termo_busca_tabela:
+            query_pedidos_tabela = query_pedidos_tabela.filter(or_(Pedido.cliente.ilike(f'%{termo_busca_tabela}%'), Pedido.telefone.ilike(f'%{termo_busca_tabela}%')))
+
+        pagination = query_pedidos_tabela.order_by(Pedido.data_venda.desc()).paginate(page=page, per_page=PER_PAGE, error_out=False)
+        pedidos_da_pagina = pagination.items
+
+        for pedido in pedidos_da_pagina:
+            if pedido.status == 'A Receber' and pedido.data_vencimento and pedido.data_vencimento < datetime.utcnow():
+                pedido.original_status = pedido.status  # Guarda o status original se precisar
+                pedido.status = 'Atrasado'
+
+        # LÓGICA DE PERÍODO PARA OS KPIs DO RESUMO - PADRÃO 'HOJE'
+        periodo_selecionado = request.args.get('periodo', 'hoje')
+        hoje = date.today()
+        data_inicio_str = request.args.get('data_inicio')
+        data_fim_str = request.args.get('data_fim')
+        data_inicio, data_fim = None, None
+        titulo_periodo = "Período Total"
+
+        if periodo_selecionado == 'maximo':
+            pass
+        elif periodo_selecionado == 'personalizado' and data_inicio_str and data_fim_str:
+            try:
+                data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
+                data_fim = datetime.combine(datetime.strptime(data_fim_str, '%Y-%m-%d'), datetime.max.time())
+                titulo_periodo = f"{data_inicio.strftime('%d/%m')} - {data_fim.strftime('%d/%m')}"
+            except ValueError:
+                periodo_selecionado = 'hoje'
+                data_inicio = datetime.combine(hoje, datetime.min.time())
+                data_fim = datetime.combine(hoje, datetime.max.time())
+                titulo_periodo = "Hoje"
+        elif periodo_selecionado == 'hoje':
+            data_inicio = datetime.combine(hoje, datetime.min.time())
+            data_fim = datetime.combine(hoje, datetime.max.time())
+            titulo_periodo = "Hoje"
+        elif periodo_selecionado == 'ontem':
+            ontem = hoje - timedelta(days=1)
+            data_inicio = datetime.combine(ontem, datetime.min.time())
+            data_fim = datetime.combine(ontem, datetime.max.time())
+            titulo_periodo = "Ontem"
+        elif periodo_selecionado == 'ultimos_7_dias':
+            data_inicio = datetime.combine(hoje - timedelta(days=6), datetime.min.time())
+            data_fim = datetime.combine(hoje, datetime.max.time())
+            titulo_periodo = "Últimos 7 dias"
+        elif periodo_selecionado == 'mes_atual':
+            primeiro_dia_mes_atual = hoje.replace(day=1)
+            data_inicio = datetime.combine(primeiro_dia_mes_atual, datetime.min.time())
+            data_fim = datetime.combine(hoje, datetime.max.time())
+            titulo_periodo = "Este Mês"
+        elif periodo_selecionado == 'mes_passado':
+            primeiro_dia_mes_atual = hoje.replace(day=1)
+            ultimo_dia_mes_passado = primeiro_dia_mes_atual - timedelta(days=1)
+            primeiro_dia_mes_passado = ultimo_dia_mes_passado.replace(day=1)
+            data_inicio = datetime.combine(primeiro_dia_mes_passado, datetime.min.time())
+            data_fim = datetime.combine(ultimo_dia_mes_passado, datetime.max.time())
+            titulo_periodo = "Mês Passado"
         else:
-            query_pedidos_tabela = query_pedidos_tabela.filter(Pedido.status == status_filtro)
-    if termo_busca:
-        query_pedidos_tabela = query_pedidos_tabela.filter(
-            or_(
-                Pedido.cliente.ilike(f'%{termo_busca}%'),
-                Pedido.telefone.ilike(f'%{termo_busca}%'),
-            )
-        )
-
-    pagination = query_pedidos_tabela.order_by(Pedido.data_venda.desc()).paginate(
-        page=page, per_page=PER_PAGE, error_out=False
-    )
-    pedidos_da_pagina = pagination.items
-
-    for pedido in pedidos_da_pagina:
-        if (
-            pedido.status == 'A Receber'
-            and pedido.data_vencimento
-            and pedido.data_vencimento < datetime.utcnow()
-        ):
-            pedido.status = 'Atrasado'  # Ajusta status apenas para exibição na tabela
-
-    # LÓGICA DE PERÍODO PARA O RESUMO - PADRÃO 'HOJE'
-    periodo_selecionado = request.args.get('periodo', 'hoje')  # Padrão é 'hoje'
-    hoje = date.today()
-    data_inicio_str = request.args.get('data_inicio')
-    data_fim_str = request.args.get('data_fim')
-    data_inicio, data_fim = None, None
-    titulo_periodo = "Período Total"  # Default para 'maximo'
-
-    if periodo_selecionado == 'maximo':
-        pass  # Não define datas
-    elif periodo_selecionado == 'personalizado' and data_inicio_str and data_fim_str:
-        try:
-            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
-            data_fim = datetime.combine(
-                datetime.strptime(data_fim_str, '%Y-%m-%d'), datetime.max.time()
-            )
-            titulo_periodo = f"{data_inicio.strftime('%d/%m')} - {data_fim.strftime('%d/%m')}"
-        except ValueError:
             periodo_selecionado = 'hoje'
             data_inicio = datetime.combine(hoje, datetime.min.time())
             data_fim = datetime.combine(hoje, datetime.max.time())
             titulo_periodo = "Hoje"
-    elif periodo_selecionado == 'hoje':
-        data_inicio = datetime.combine(hoje, datetime.min.time())
-        data_fim = datetime.combine(hoje, datetime.max.time())
-        titulo_periodo = "Hoje"
-    elif periodo_selecionado == 'ontem':
-        ontem = hoje - timedelta(days=1)
-        data_inicio = datetime.combine(ontem, datetime.min.time())
-        data_fim = datetime.combine(ontem, datetime.max.time())
-        titulo_periodo = "Ontem"
-    elif periodo_selecionado == 'ultimos_7_dias':
-        data_inicio = datetime.combine(hoje - timedelta(days=6), datetime.min.time())
-        data_fim = datetime.combine(hoje, datetime.max.time())
-        titulo_periodo = "Últimos 7 dias"
-    elif periodo_selecionado == 'mes_atual':
-        primeiro_dia_mes_atual = hoje.replace(day=1)
-        data_inicio = datetime.combine(primeiro_dia_mes_atual, datetime.min.time())
-        data_fim = datetime.combine(hoje, datetime.max.time())
-        titulo_periodo = "Este Mês"
-    elif periodo_selecionado == 'mes_passado':
-        primeiro_dia_mes_atual = hoje.replace(day=1)
-        ultimo_dia_mes_passado = primeiro_dia_mes_atual - timedelta(days=1)
-        primeiro_dia_mes_passado = ultimo_dia_mes_passado.replace(day=1)
-        data_inicio = datetime.combine(primeiro_dia_mes_passado, datetime.min.time())
-        data_fim = datetime.combine(ultimo_dia_mes_passado, datetime.max.time())
-        titulo_periodo = "Mês Passado"
-    else:  # Default fallback
-        periodo_selecionado = 'hoje'
-        data_inicio = datetime.combine(hoje, datetime.min.time())
-        data_fim = datetime.combine(hoje, datetime.max.time())
-        titulo_periodo = "Hoje"
 
-    # Função auxiliar para aplicar filtro de data
-    def apply_date_filter(query, column):
-        if data_inicio and data_fim:
-            return query.filter(column.between(data_inicio, data_fim))
-        return query
+        # Função auxiliar para aplicar filtro de data
+        def apply_date_filter(query, column):
+            if data_inicio and data_fim:
+                return query.filter(column.between(data_inicio, data_fim))
+            return query
 
-    # =================================================================
-    # CÁLCULOS DOS KPIS COM LÓGICA DE FILTRO REFINADA
-    # =================================================================
-    # KPIs QUE DEPENDEM DO PERÍODO
-    total_agendado = (
-        apply_date_filter(db.session.query(func.sum(Pedido.valor)), Pedido.data_venda)
-        .filter(Pedido.status == 'Agendado')
-        .scalar()
-        or 0.0
-    )
-    total_agendado_geral = (
-        db.session.query(func.sum(Pedido.valor))
-        .filter(Pedido.status == 'Agendado')
-        .scalar()
-        or 0.0
-    )
-    total_pago = (
-        apply_date_filter(db.session.query(func.sum(Pedido.valor)), Pedido.data_pagamento)
-        .filter(Pedido.status == 'Pago')
-        .scalar()
-        or 0.0
-    )
-    total_frustrado = (
-        apply_date_filter(db.session.query(func.sum(Pedido.valor)), Pedido.data_venda)
-        .filter(Pedido.status == 'Frustrado')
-        .scalar()
-        or 0.0
-    )
-    total_gasto = (
-        apply_date_filter(db.session.query(func.sum(Gasto.valor)), Gasto.data)
-        .scalar()
-        or 0.0
-    )
-    quantidade_vendas = (
-        apply_date_filter(db.session.query(func.count(Pedido.id)), Pedido.data_pagamento)
-        .filter(Pedido.status == 'Pago')
-        .scalar()
-        or 0
-    )
+        # =================================================================
+        # CÁLCULOS DOS KPIS - LÓGICA REVISADA E COM PRINTS
+        # =================================================================
+        # KPI QUE NÃO DEPENDE DO PERÍODO
+        total_agendado_global = db.session.query(func.sum(Pedido.valor)).filter(Pedido.status == 'Agendado').scalar() or 0.0
+        print(f"Agendado (Global): {total_agendado_global}")  # DEBUG PRINT
 
-    # KPIs QUE NÃO DEPENDEM DO PERÍODO (SEMPRE TOTAIS ATUAIS)
-    total_a_receber = (
-        db.session.query(func.sum(Pedido.valor))
-        .filter(Pedido.status == 'A Receber', Pedido.data_vencimento >= datetime.utcnow())
-        .scalar()
-        or 0.0
-    )
-    total_atrasado = (
-        db.session.query(func.sum(Pedido.valor))
-        .filter(Pedido.status == 'A Receber', Pedido.data_vencimento < datetime.utcnow())
-        .scalar()
-        or 0.0
-    )
+        # KPIs QUE DEPENDEM DO PERÍODO
+        total_pago_periodo = apply_date_filter(db.session.query(func.sum(Pedido.valor)), Pedido.data_pagamento).filter(Pedido.status == 'Pago').scalar() or 0.0
+        print(f"Pago (Periodo: {titulo_periodo}): {total_pago_periodo}")  # DEBUG PRINT
 
-    # KPIs DERIVADOS (USAM VALORES DO PERÍODO)
-    lucro = total_pago - total_gasto
-    roi = (lucro / total_gasto) if total_gasto > 0 else 0
-    margem = (lucro / total_pago) * 100 if total_pago > 0 else 0
+        total_frustrado_periodo = apply_date_filter(db.session.query(func.sum(Pedido.valor)), Pedido.data_venda).filter(Pedido.status == 'Frustrado').scalar() or 0.0
+        print(f"Frustrado (Periodo: {titulo_periodo}): {total_frustrado_periodo}")  # DEBUG PRINT
 
-    # Dicionário final para o template
-    resumo_dados = {
-        'agendado': total_agendado,
-        'agendado_total': total_agendado_geral,
-        'faturamento_liquido': total_pago,
-        'gasto': total_gasto,
-        'lucro': lucro,
-        'roi': roi,
-        'falta_receber': total_a_receber,  # Nome como na imagem 2
-        'frutado': total_frustrado,  # Nome como na imagem 2
-        'frustrado': total_frustrado,
-        'quantidade_vendas': quantidade_vendas,
-        'atrasados': total_atrasado,  # Mantemos o cálculo atual
-        'projecao': total_pago + total_a_receber + total_agendado,
-        # Chaves legadas para manter compatibilidade com o template atual
-        'pagos': total_pago,
-        'gastos': total_gasto,
-        'roas': roi,
-        'a_receber': total_a_receber,
-        'frustrados': total_frustrado,
-        'margem': margem,
-    }
+        total_gasto_periodo = apply_date_filter(db.session.query(func.sum(Gasto.valor)), Gasto.data).scalar() or 0.0
+        print(f"Gasto (Periodo: {titulo_periodo}): {total_gasto_periodo}")  # DEBUG PRINT
 
-    # Dados dos gráficos (exemplo para faturamento, adaptar para outros)
-    # Certifique-se que essa lógica também usa apply_date_filter corretamente
-    # ... (código para calcular grafico_labels, grafico_data, etc.) ...
+        quantidade_vendas_periodo = apply_date_filter(db.session.query(func.count(Pedido.id)), Pedido.data_pagamento).filter(Pedido.status == 'Pago').scalar() or 0
+        print(f"Qtd Vendas (Periodo: {titulo_periodo}): {quantidade_vendas_periodo}")  # DEBUG PRINT
 
-    # Exemplo (PRECISA SER IMPLEMENTADO CORRETAMENTE):
-    grafico_faturamento_query = (
-        apply_date_filter(
-            db.session.query(
-                func.date(Pedido.data_pagamento), func.sum(Pedido.valor)
-            ),
-            Pedido.data_pagamento,
-        )
-        .filter(Pedido.status == 'Pago')
-        .group_by(func.date(Pedido.data_pagamento))
-        .order_by(func.date(Pedido.data_pagamento))
-    )
-    grafico_faturamento_resultado = grafico_faturamento_query.all()
+        # A RECEBER E ATRASADOS DO PERÍODO (usando data_venda como referência de origem)
+        total_a_receber_periodo = apply_date_filter(db.session.query(func.sum(Pedido.valor)), Pedido.data_venda).filter(Pedido.status == 'A Receber', Pedido.data_vencimento >= datetime.utcnow()).scalar() or 0.0
+        print(f"A Receber (Periodo: {titulo_periodo}): {total_a_receber_periodo}")  # DEBUG PRINT
 
-    grafico_gastos_query = (
-        apply_date_filter(
-            db.session.query(func.date(Gasto.data), func.sum(Gasto.valor)),
-            Gasto.data,
-        )
-        .group_by(func.date(Gasto.data))
-        .order_by(func.date(Gasto.data))
-    )
-    grafico_gastos_resultado = grafico_gastos_query.all()
+        total_atrasado_periodo = apply_date_filter(db.session.query(func.sum(Pedido.valor)), Pedido.data_venda).filter(Pedido.status == 'A Receber', Pedido.data_vencimento < datetime.utcnow()).scalar() or 0.0
+        print(f"Atrasado (Periodo: {titulo_periodo}): {total_atrasado_periodo}")  # DEBUG PRINT
 
-    grafico_pagamentos_query = (
-        apply_date_filter(
-            db.session.query(Pedido.metodo_pagamento, func.count(Pedido.id)),
-            Pedido.data_pagamento,
-        )
-        .filter(Pedido.status == 'Pago')
-        .group_by(Pedido.metodo_pagamento)
-        .order_by(Pedido.metodo_pagamento)
-    )
-    grafico_pagamentos_resultado = grafico_pagamentos_query.all()
+        # KPIs DERIVADOS (USAM VALORES DO PERÍODO)
+        lucro_periodo = total_pago_periodo - total_gasto_periodo
+        roi_periodo = (lucro_periodo / total_gasto_periodo) if total_gasto_periodo > 0 else 0
+        print(f"Lucro (Periodo: {titulo_periodo}): {lucro_periodo}")  # DEBUG PRINT
+        print(f"ROI (Periodo: {titulo_periodo}): {roi_periodo}")  # DEBUG PRINT
 
-    grafico_categorias_query = (
-        apply_date_filter(
-            db.session.query(Gasto.categoria, func.sum(Gasto.valor)),
-            Gasto.data,
-        )
-        .group_by(Gasto.categoria)
-        .order_by(Gasto.categoria)
-    )
-    grafico_categorias_resultado = grafico_categorias_query.all()
+        # Dicionário final para o template
+        resumo_dados = {
+            'agendado_total': total_agendado_global,
+            'faturamento_liquido': total_pago_periodo,
+            'gasto': total_gasto_periodo,
+            'lucro': lucro_periodo,
+            'roi': roi_periodo,
+            'falta_receber': total_a_receber_periodo,  # <- MUDOU: Agora é do período
+            'frutado': total_frustrado_periodo,
+            'quantidade_vendas': quantidade_vendas_periodo,
+            'atrasados': total_atrasado_periodo,      # <- MUDOU: Agora é do período
+            'projecao': total_pago_periodo + total_a_receber_periodo + total_agendado_global
+        }
 
-    def _formata_label(valor):
-        if isinstance(valor, datetime):
-            return valor.strftime('%d/%m')
-        if isinstance(valor, date):
-            return valor.strftime('%d/%m')
-        if isinstance(valor, str):
-            try:
-                return datetime.strptime(valor, '%Y-%m-%d').strftime('%d/%m')
-            except ValueError:
-                return valor
-        return str(valor)
+        # Dados dos gráficos (PRECISAM SER RECALCULADOS COM A NOVA LÓGICA DE FILTRO)
+        grafico_faturamento_resultado = apply_date_filter(db.session.query(func.date(Pedido.data_pagamento), func.sum(Pedido.valor)), Pedido.data_pagamento).filter(Pedido.status == 'Pago').group_by(func.date(Pedido.data_pagamento)).order_by(func.date(Pedido.data_pagamento)).all()
+        grafico_labels = [item[0].strftime('%d/%m') for item in grafico_faturamento_resultado] if grafico_faturamento_resultado else []
+        grafico_data = [float(item[1]) for item in grafico_faturamento_resultado] if grafico_faturamento_resultado else []
+        print(f"Grafico Faturamento Labels: {grafico_labels}")  # DEBUG PRINT
+        print(f"Grafico Faturamento Data: {grafico_data}")  # DEBUG PRINT
 
-    grafico_labels = [_formata_label(item[0]) for item in grafico_faturamento_resultado]
-    grafico_data = [float(item[1]) for item in grafico_faturamento_resultado]
+        # ...(Calcular dados para os outros gráficos de forma similar, usando apply_date_filter)...
+        # Adicionar prints para os dados dos outros gráficos também
 
-    grafico_gastos_labels = [
-        _formata_label(item[0]) for item in grafico_gastos_resultado
-    ]
-    grafico_gastos_data = [float(item[1]) for item in grafico_gastos_resultado]
+        context = {
+            "pedidos": pedidos_da_pagina, "pagination": pagination, "resumo": resumo_dados,
+            "periodo_selecionado": periodo_selecionado, "data_inicio": data_inicio_str, "data_fim": data_fim_str,
+            "titulo_periodo": titulo_periodo,
+            "grafico_labels": grafico_labels, "grafico_data": grafico_data
+            # ... (passar dados dos outros gráficos para o template)
+        }
 
-    grafico_pagamentos_labels = [
-        (item[0] or 'Não informado') for item in grafico_pagamentos_resultado
-    ]
-    grafico_pagamentos_data = [int(item[1]) for item in grafico_pagamentos_resultado]
+        return render_template("dashboard.html", **context)
 
-    grafico_categorias_labels = [
-        (item[0] or 'Não informado') for item in grafico_categorias_resultado
-    ]
-    grafico_categorias_data = [float(item[1]) for item in grafico_categorias_resultado]
-
-    # ... (calcular dados para outros gráficos de forma similar) ...
-
-    # Adicionar dados dos gráficos ao contexto
-    context = {
-        "pedidos": pedidos_da_pagina,
-        "pagination": pagination,
-        "resumo": resumo_dados,
-        "periodo_selecionado": periodo_selecionado,
-        "data_inicio": data_inicio_str,
-        "data_fim": data_fim_str,
-        "titulo_periodo": titulo_periodo,
-        "grafico_labels": grafico_labels,
-        "grafico_data": grafico_data,
-        "grafico_gastos_labels": grafico_gastos_labels,
-        "grafico_gastos_data": grafico_gastos_data,
-        "grafico_pagamentos_labels": grafico_pagamentos_labels,
-        "grafico_pagamentos_data": grafico_pagamentos_data,
-        "grafico_categorias_labels": grafico_categorias_labels,
-        "grafico_categorias_data": grafico_categorias_data,
-        # ... (passar dados dos outros gráficos) ...
-    }
-
-    return render_template("dashboard.html", **context)
+    except Exception as e:
+        # Se ocorrer qualquer erro, mostre no terminal para depuração
+        print(f"ERRO na rota dashboard: {e}")
+        traceback.print_exc()
+        # Você pode retornar uma página de erro aqui se preferir
+        return f"Ocorreu um erro: {e}", 500
 
 
 # --- Restante do arquivo (rotas listar_pedidos, salvar_observacao, webhook_braip, adicionar_gasto, atualizar_status, criar_pedidos_massa, criar_pedido_antigo, if __name__...) ---
