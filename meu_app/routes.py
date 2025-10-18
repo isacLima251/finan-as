@@ -557,7 +557,8 @@ def atualizar_status(pedido_id):
         pedido.data_pagamento = None
 
     db.session.commit()
-    return jsonify({'status': 'sucesso'})
+    mensagem_sucesso = f"Status do pedido {pedido.id} atualizado para {novo_status}."
+    return jsonify({'status': 'sucesso', 'mensagem': mensagem_sucesso})
 
 
 @app.route('/criar_pedidos_massa')
