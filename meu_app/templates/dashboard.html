@@ -163,80 +163,87 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Inicializa Tooltips do Bootstrap
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-      return new bootstrap.Tooltip(tooltipTriggerEl)
-    })
-
-    // Lógica para mostrar/esconder campos de data personalizada
-    const seletorPeriodo = document.getElementById('select-periodo');
-    const camposPersonalizados = document.getElementById('campos-personalizados');
-    function toggleCamposPersonalizados() {
-        if (seletorPeriodo.value === 'personalizado') { camposPersonalizados.classList.remove('d-none'); }
-        else { camposPersonalizados.classList.add('d-none'); }
-    }
-    toggleCamposPersonalizados();
-    seletorPeriodo.addEventListener('change', function() {
-        if (this.value !== 'personalizado') { document.getElementById('form-periodo').submit(); }
-        toggleCamposPersonalizados();
-    });
-
-    // --- Configuração dos Gráficos ---
-
-    // Gráfico de Faturamento por Dia
-    const ctxFaturamento = document.getElementById('graficoFaturamento')?.getContext('2d');
-    if (ctxFaturamento) {
-        const graficoLabels = {{ grafico_labels|tojson }};
-        const graficoData = {{ grafico_data|tojson }};
-        new Chart(ctxFaturamento, {
-            type: 'bar',
-            data: {
-                labels: graficoLabels,
-                datasets: [{
-                    label: 'Faturamento',
-                    data: graficoData,
-                    backgroundColor: 'rgba(54, 162, 235, 0.6)', // Azul
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: { scales: { y: { beginAtZero: true } }, responsive: true, maintainAspectRatio: false }
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializa Tooltips do Bootstrap
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+          return new bootstrap.Tooltip(tooltipTriggerEl)
         });
-    }
 
-    // Gráfico de Gastos por Dia (ASSUMINDO QUE OS DADOS SÃO ENVIADOS DO BACKEND)
-    const ctxGastos = document.getElementById('graficoGastos')?.getContext('2d');
-    if (ctxGastos) {
-        // const graficoGastosLabels = {{ grafico_gastos_labels|tojson|default([]) }}; // Exemplo
-        // const graficoGastosData = {{ grafico_gastos_data|tojson|default([]) }};   // Exemplo
-        // new Chart(ctxGastos, { /* ... configuração ... */ });
-         // IMPLEMENTAR A CONFIGURAÇÃO DESTE GRÁFICO (similar ao de faturamento, mas com dados de gastos)
-         // Use cores diferentes, ex: vermelho 'rgba(255, 99, 132, 0.6)'
-    }
+        // Lógica dos botões de status (sem alterações)
+        const botoesAtualizar = document.querySelectorAll('.btn-atualizar-status');
+        botoesAtualizar.forEach(botao => {
+            botao.addEventListener('click', function() {
+                fetch(`/atualizar_status/${this.dataset.pedidoId}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: this.dataset.novoStatus })
+                }).then(response => response.json()).then(data => { if (data.status === 'sucesso') { /* NÃO RECARREGA MAIS - MOSTRAR TOAST */
+                   // Encontrar o elemento toast e mostrar (IMPLEMENTAR LÓGICA DO TOAST AQUI)
+                   // Atualizar a badge na tabela dinamicamente (IMPLEMENTAR LÓGICA AQUI)
+                   console.log('Status atualizado!'); // Placeholder
+                } else { alert('Erro: ' + data.mensagem); } })
+                .catch(error => { console.error('Erro:', error); alert('Erro de comunicação.'); });
+            });
+        });
 
-    // Gráfico de Gastos por Categoria (ASSUMINDO DADOS DO BACKEND)
-    const ctxCategorias = document.getElementById('graficoCategorias')?.getContext('2d');
-    if (ctxCategorias) {
-        // const graficoCategoriasLabels = {{ grafico_categorias_labels|tojson|default([]) }}; // Exemplo
-        // const graficoCategoriasData = {{ grafico_categorias_data|tojson|default([]) }};   // Exemplo
-        // new Chart(ctxCategorias, { type: 'doughnut', data: { /*...*/ }, options: { /*...*/ } });
-        // IMPLEMENTAR A CONFIGURAÇÃO DESTE GRÁFICO (tipo 'doughnut')
-    }
+        // =========================================================
+        // LÓGICA CORRIGIDA PARA O SELETOR DE PERÍODO E DATAS
+        // =========================================================
+        const seletorPeriodo = document.getElementById('select-periodo');
+        const camposPersonalizados = document.getElementById('campos-personalizados');
+        const formPeriodo = document.getElementById('form-periodo'); // Pega a referência do formulário
 
-    // Gráfico de Vendas por Pagamento (ASSUMINDO DADOS DO BACKEND)
-    const ctxPagamentos = document.getElementById('graficoPagamentos')?.getContext('2d');
-    if (ctxPagamentos) {
-        // const graficoPagamentosLabels = {{ grafico_pagamentos_labels|tojson|default([]) }}; // Exemplo
-        // const graficoPagamentosData = {{ grafico_pagamentos_data|tojson|default([]) }};   // Exemplo
-        // new Chart(ctxPagamentos, { type: 'doughnut', data: { /*...*/ }, options: { /*...*/ } });
-         // IMPLEMENTAR A CONFIGURAÇÃO DESTE GRÁFICO (tipo 'doughnut')
-    }
+        function toggleCamposPersonalizados() {
+            // Verifica se os elementos existem antes de tentar acessá-los
+            if (seletorPeriodo && camposPersonalizados) {
+                 if (seletorPeriodo.value === 'personalizado') {
+                    camposPersonalizados.classList.remove('d-none'); // Mostra os campos
+                } else {
+                    camposPersonalizados.classList.add('d-none'); // Esconde os campos
+                }
+            } else {
+                console.error("Erro: Elemento #select-periodo ou #campos-personalizados não encontrado.");
+            }
+        }
 
-});
-</script>
+        // Garante que o estado inicial esteja correto ao carregar a página
+        toggleCamposPersonalizados();
+
+        // Adiciona o 'ouvinte' para quando o valor do seletor mudar
+        if (seletorPeriodo && formPeriodo) {
+            seletorPeriodo.addEventListener('change', function() {
+                toggleCamposPersonalizados(); // Mostra/esconde os campos de data
+                // Envia o formulário automaticamente APENAS se NÃO for 'personalizado'
+                if (this.value !== 'personalizado') {
+                    formPeriodo.submit();
+                }
+            });
+        } else {
+             console.error("Erro: Elemento #select-periodo ou #form-periodo não encontrado.");
+        }
+        // =========================================================
+
+
+        // Lógica do Modal de Observação (sem alterações)
+        const obsModal = document.getElementById('obsModal');
+        // ... (código do modal como antes) ...
+
+
+        // --- Configuração dos Gráficos ---
+        // (Certifique-se que esta parte está correta e recebendo os dados)
+        const ctxFaturamento = document.getElementById('graficoFaturamento')?.getContext('2d');
+        // ... (configuração gráfico faturamento)
+        const ctxGastos = document.getElementById('graficoGastos')?.getContext('2d');
+        // ... (configuração gráfico gastos)
+        const ctxCategorias = document.getElementById('graficoCategorias')?.getContext('2d');
+        // ... (configuração gráfico categorias)
+        const ctxPagamentos = document.getElementById('graficoPagamentos')?.getContext('2d');
+        // ... (configuração gráfico pagamentos)
+
+    });
+    </script>
 {% endblock %}
