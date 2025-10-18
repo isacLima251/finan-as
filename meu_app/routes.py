@@ -6,6 +6,77 @@ from meu_app.models import Pedido, Gasto
 import traceback  # Para depuração
 
 
+STATUS_EQUIVALENTS = {
+    "agendado": {"agendado", "aguardando pagamento"},
+    "pago": {"pago", "pago manual", "pagamento confirmado", "pagamento aprovado"},
+    "a_receber": {"a receber"},
+    "atrasado": {"atrasado"},
+    "frustrado": {"frustrado", "cancelado", "estornado", "recusado", "expirado"},
+}
+
+STATUS_PREFIX_EQUIVALENTS = {
+    "agendado": ["agendado", "aguardando pagamento"],
+    "pago": ["pagamento aprovado", "pagamento confirmado", "pago ", "pago-"],
+    "a_receber": ["a receber"],
+    "atrasado": ["atrasado"],
+    "frustrado": ["frustrado", "cancelado", "estornado", "recusado", "expirado"],
+}
+
+STATUS_LABEL_TO_GROUP = {
+    "Agendado": "agendado",
+    "Pago": "pago",
+    "Frustrado": "frustrado",
+    "A Receber": "a_receber",
+    "Atrasado": "atrasado",
+}
+
+
+def build_status_condition(group_name):
+    """Retorna uma expressão SQLAlchemy que agrupa diferentes variações de status."""
+
+    status_column = func.lower(Pedido.status)
+    conditions = []
+
+    for value in STATUS_EQUIVALENTS.get(group_name, set()):
+        conditions.append(status_column == value)
+
+    for prefix in STATUS_PREFIX_EQUIVALENTS.get(group_name, []):
+        conditions.append(status_column.like(f"{prefix}%"))
+
+    if not conditions:
+        return None
+
+    return or_(*conditions)
+
+
+def normalizar_status_para_dashboard(status_bruto):
+    """Normaliza diferentes descrições de status para categorias principais do painel."""
+
+    if not status_bruto:
+        return None
+
+    status = status_bruto.strip().lower()
+
+    if (
+        status.startswith("pagamento aprovado")
+        or status.startswith("pagamento confirm")
+        or status == "pago"
+        or status.startswith("pago ")
+        or status.startswith("pago-")
+    ):
+        return "Pago"
+
+    if status.startswith("frust") or status.startswith("cancel") or status.startswith("recus") or status.startswith(
+        "estorn"
+    ) or status.startswith("expir"):
+        return "Frustrado"
+
+    if status.startswith("atras"):
+        return "Atrasado"
+
+    return None
+
+
 @app.route("/")
 def dashboard():
     try:  # Adicionado Try/Except para capturar erros inesperados
@@ -18,9 +89,24 @@ def dashboard():
         query_pedidos_tabela = Pedido.query
         if status_filtro_tabela:
             if status_filtro_tabela == 'Atrasado':
-                query_pedidos_tabela = query_pedidos_tabela.filter(Pedido.status == 'A Receber', Pedido.data_vencimento < datetime.utcnow())
+                atrasado_condition = build_status_condition("atrasado")
+                a_receber_condition = build_status_condition("a_receber")
+                combined_conditions = []
+                if atrasado_condition is not None:
+                    combined_conditions.append(atrasado_condition)
+                if a_receber_condition is not None:
+                    combined_conditions.append(a_receber_condition)
+                if combined_conditions:
+                    query_pedidos_tabela = query_pedidos_tabela.filter(or_(*combined_conditions))
+                query_pedidos_tabela = query_pedidos_tabela.filter(Pedido.data_vencimento < datetime.utcnow())
             else:
-                query_pedidos_tabela = query_pedidos_tabela.filter(Pedido.status == status_filtro_tabela)
+                group_name = STATUS_LABEL_TO_GROUP.get(status_filtro_tabela)
+                if group_name:
+                    condition = build_status_condition(group_name)
+                    if condition is not None:
+                        query_pedidos_tabela = query_pedidos_tabela.filter(condition)
+                else:
+                    query_pedidos_tabela = query_pedidos_tabela.filter(Pedido.status == status_filtro_tabela)
         if termo_busca_tabela:
             query_pedidos_tabela = query_pedidos_tabela.filter(or_(Pedido.cliente.ilike(f'%{termo_busca_tabela}%'), Pedido.telefone.ilike(f'%{termo_busca_tabela}%')))
 
@@ -93,27 +179,60 @@ def dashboard():
         # CÁLCULOS DOS KPIS - LÓGICA REVISADA E COM PRINTS
         # =================================================================
         # KPI QUE NÃO DEPENDE DO PERÍODO
-        total_agendado_global = db.session.query(func.sum(Pedido.valor)).filter(Pedido.status == 'Agendado').scalar() or 0.0
+        agendado_condition = build_status_condition("agendado")
+        total_agendado_query = db.session.query(func.sum(Pedido.valor))
+        if agendado_condition is not None:
+            total_agendado_query = total_agendado_query.filter(agendado_condition)
+        total_agendado_global = total_agendado_query.scalar() or 0.0
         print(f"Agendado (Global): {total_agendado_global}")  # DEBUG PRINT
 
         # KPIs QUE DEPENDEM DO PERÍODO
-        total_pago_periodo = apply_date_filter(db.session.query(func.sum(Pedido.valor)), Pedido.data_pagamento).filter(Pedido.status == 'Pago').scalar() or 0.0
+        data_pagamento_ou_venda = func.coalesce(Pedido.data_pagamento, Pedido.data_venda)
+
+        pago_condition = build_status_condition("pago")
+        total_pago_query = apply_date_filter(db.session.query(func.sum(Pedido.valor)), data_pagamento_ou_venda)
+        if pago_condition is not None:
+            total_pago_query = total_pago_query.filter(pago_condition)
+        total_pago_periodo = total_pago_query.scalar() or 0.0
         print(f"Pago (Periodo: {titulo_periodo}): {total_pago_periodo}")  # DEBUG PRINT
 
-        total_frustrado_periodo = apply_date_filter(db.session.query(func.sum(Pedido.valor)), Pedido.data_venda).filter(Pedido.status == 'Frustrado').scalar() or 0.0
+        frustrado_condition = build_status_condition("frustrado")
+        total_frustrado_query = apply_date_filter(db.session.query(func.sum(Pedido.valor)), data_pagamento_ou_venda)
+        if frustrado_condition is not None:
+            total_frustrado_query = total_frustrado_query.filter(frustrado_condition)
+        total_frustrado_periodo = total_frustrado_query.scalar() or 0.0
         print(f"Frustrado (Periodo: {titulo_periodo}): {total_frustrado_periodo}")  # DEBUG PRINT
 
         total_gasto_periodo = apply_date_filter(db.session.query(func.sum(Gasto.valor)), Gasto.data).scalar() or 0.0
         print(f"Gasto (Periodo: {titulo_periodo}): {total_gasto_periodo}")  # DEBUG PRINT
 
-        quantidade_vendas_periodo = apply_date_filter(db.session.query(func.count(Pedido.id)), Pedido.data_pagamento).filter(Pedido.status == 'Pago').scalar() or 0
+        quantidade_vendas_query = apply_date_filter(db.session.query(func.count(Pedido.id)), data_pagamento_ou_venda)
+        if pago_condition is not None:
+            quantidade_vendas_query = quantidade_vendas_query.filter(pago_condition)
+        quantidade_vendas_periodo = quantidade_vendas_query.scalar() or 0
         print(f"Qtd Vendas (Periodo: {titulo_periodo}): {quantidade_vendas_periodo}")  # DEBUG PRINT
 
         # A RECEBER E ATRASADOS DO PERÍODO (usando data_venda como referência de origem)
-        total_a_receber_periodo = apply_date_filter(db.session.query(func.sum(Pedido.valor)), Pedido.data_venda).filter(Pedido.status == 'A Receber', Pedido.data_vencimento >= datetime.utcnow()).scalar() or 0.0
+        a_receber_condition = build_status_condition("a_receber")
+        total_a_receber_query = apply_date_filter(db.session.query(func.sum(Pedido.valor)), data_pagamento_ou_venda)
+        if a_receber_condition is not None:
+            total_a_receber_query = total_a_receber_query.filter(a_receber_condition)
+        total_a_receber_periodo = total_a_receber_query.filter(Pedido.data_vencimento >= datetime.utcnow()).scalar() or 0.0
         print(f"A Receber (Periodo: {titulo_periodo}): {total_a_receber_periodo}")  # DEBUG PRINT
 
-        total_atrasado_periodo = apply_date_filter(db.session.query(func.sum(Pedido.valor)), Pedido.data_venda).filter(Pedido.status == 'A Receber', Pedido.data_vencimento < datetime.utcnow()).scalar() or 0.0
+        atrasado_condition = build_status_condition("atrasado")
+        atrasado_ou_a_receber = None
+        if a_receber_condition is not None and atrasado_condition is not None:
+            atrasado_ou_a_receber = or_(a_receber_condition, atrasado_condition)
+        elif a_receber_condition is not None:
+            atrasado_ou_a_receber = a_receber_condition
+        else:
+            atrasado_ou_a_receber = atrasado_condition
+
+        total_atrasado_query = apply_date_filter(db.session.query(func.sum(Pedido.valor)), data_pagamento_ou_venda)
+        if atrasado_ou_a_receber is not None:
+            total_atrasado_query = total_atrasado_query.filter(atrasado_ou_a_receber)
+        total_atrasado_periodo = total_atrasado_query.filter(Pedido.data_vencimento < datetime.utcnow()).scalar() or 0.0
         print(f"Atrasado (Periodo: {titulo_periodo}): {total_atrasado_periodo}")  # DEBUG PRINT
 
         # KPIs DERIVADOS (USAM VALORES DO PERÍODO)
@@ -137,7 +256,15 @@ def dashboard():
         }
 
         # Dados dos gráficos (PRECISAM SER RECALCULADOS COM A NOVA LÓGICA DE FILTRO)
-        grafico_faturamento_resultado = apply_date_filter(db.session.query(func.date(Pedido.data_pagamento), func.sum(Pedido.valor)), Pedido.data_pagamento).filter(Pedido.status == 'Pago').group_by(func.date(Pedido.data_pagamento)).order_by(func.date(Pedido.data_pagamento)).all()
+        grafico_data_base = apply_date_filter(
+            db.session.query(func.date(data_pagamento_ou_venda), func.sum(Pedido.valor)),
+            data_pagamento_ou_venda,
+        )
+        if pago_condition is not None:
+            grafico_data_base = grafico_data_base.filter(pago_condition)
+        grafico_faturamento_resultado = (
+            grafico_data_base.group_by(func.date(data_pagamento_ou_venda)).order_by(func.date(data_pagamento_ou_venda)).all()
+        )
         grafico_labels = [item[0].strftime('%d/%m') for item in grafico_faturamento_resultado] if grafico_faturamento_resultado else []
         grafico_data = [float(item[1]) for item in grafico_faturamento_resultado] if grafico_faturamento_resultado else []
         print(f"Grafico Faturamento Labels: {grafico_labels}")  # DEBUG PRINT
@@ -179,12 +306,24 @@ def listar_pedidos():
     query = Pedido.query
     if status_filtro:
         if status_filtro == 'Atrasado':
-            query = query.filter(
-                Pedido.status == 'A Receber',
-                Pedido.data_vencimento < datetime.utcnow(),
-            )
+            atrasado_condition = build_status_condition("atrasado")
+            a_receber_condition = build_status_condition("a_receber")
+            combined_conditions = []
+            if atrasado_condition is not None:
+                combined_conditions.append(atrasado_condition)
+            if a_receber_condition is not None:
+                combined_conditions.append(a_receber_condition)
+            if combined_conditions:
+                query = query.filter(or_(*combined_conditions))
+            query = query.filter(Pedido.data_vencimento < datetime.utcnow())
         else:
-            query = query.filter(Pedido.status == status_filtro)
+            group_name = STATUS_LABEL_TO_GROUP.get(status_filtro)
+            if group_name:
+                condition = build_status_condition(group_name)
+                if condition is not None:
+                    query = query.filter(condition)
+            else:
+                query = query.filter(Pedido.status == status_filtro)
     if termo_busca:
         query = query.filter(
             or_(
@@ -295,9 +434,11 @@ def adicionar_gasto():
 @app.route('/atualizar_status/<int:pedido_id>', methods=['POST'])
 def atualizar_status(pedido_id):
     pedido = Pedido.query.get_or_404(pedido_id)
-    novo_status = request.json.get('status')
-    if novo_status not in ['Pago', 'Frustrado', 'Atrasado']:
-        return jsonify({'status': 'erro'}), 400
+    status_informado = request.json.get('status')
+    novo_status = normalizar_status_para_dashboard(status_informado)
+
+    if not novo_status:
+        return jsonify({'status': 'erro', 'mensagem': 'Status inválido'}), 400
 
     pedido.status = novo_status
     if novo_status == 'Pago':
