@@ -121,6 +121,7 @@ def dashboard():
         # LÓGICA DE PERÍODO PARA OS KPIs DO RESUMO - PADRÃO 'HOJE'
         periodo_selecionado = request.args.get('periodo', 'hoje')
         hoje = date.today()
+        inicio_do_dia_atual = datetime.combine(hoje, datetime.min.time())
         data_inicio_str = request.args.get('data_inicio')
         data_fim_str = request.args.get('data_fim')
         data_inicio, data_fim = None, None
@@ -169,6 +170,10 @@ def dashboard():
             data_fim = datetime.combine(hoje, datetime.max.time())
             titulo_periodo = "Hoje"
 
+        print(
+            f"Período selecionado: {periodo_selecionado} | Início: {data_inicio} | Fim: {data_fim}"
+        )
+
         # Função auxiliar para aplicar filtro de data
         def apply_date_filter(query, column):
             if data_inicio and data_fim:
@@ -187,17 +192,20 @@ def dashboard():
         print(f"Agendado (Global): {total_agendado_global}")  # DEBUG PRINT
 
         # KPIs QUE DEPENDEM DO PERÍODO
-        data_pagamento_ou_venda = func.coalesce(Pedido.data_pagamento, Pedido.data_venda)
-
         pago_condition = build_status_condition("pago")
-        total_pago_query = apply_date_filter(db.session.query(func.sum(Pedido.valor)), data_pagamento_ou_venda)
+        total_pago_query = apply_date_filter(
+            db.session.query(func.sum(Pedido.valor)), Pedido.data_pagamento
+        )
         if pago_condition is not None:
             total_pago_query = total_pago_query.filter(pago_condition)
+        total_pago_query = total_pago_query.filter(Pedido.data_pagamento.isnot(None))
         total_pago_periodo = total_pago_query.scalar() or 0.0
         print(f"Pago (Periodo: {titulo_periodo}): {total_pago_periodo}")  # DEBUG PRINT
 
         frustrado_condition = build_status_condition("frustrado")
-        total_frustrado_query = apply_date_filter(db.session.query(func.sum(Pedido.valor)), data_pagamento_ou_venda)
+        total_frustrado_query = apply_date_filter(
+            db.session.query(func.sum(Pedido.valor)), Pedido.data_venda
+        )
         if frustrado_condition is not None:
             total_frustrado_query = total_frustrado_query.filter(frustrado_condition)
         total_frustrado_periodo = total_frustrado_query.scalar() or 0.0
@@ -206,33 +214,52 @@ def dashboard():
         total_gasto_periodo = apply_date_filter(db.session.query(func.sum(Gasto.valor)), Gasto.data).scalar() or 0.0
         print(f"Gasto (Periodo: {titulo_periodo}): {total_gasto_periodo}")  # DEBUG PRINT
 
-        quantidade_vendas_query = apply_date_filter(db.session.query(func.count(Pedido.id)), data_pagamento_ou_venda)
+        quantidade_vendas_query = apply_date_filter(
+            db.session.query(func.count(Pedido.id)), Pedido.data_pagamento
+        )
         if pago_condition is not None:
             quantidade_vendas_query = quantidade_vendas_query.filter(pago_condition)
+        quantidade_vendas_query = quantidade_vendas_query.filter(Pedido.data_pagamento.isnot(None))
         quantidade_vendas_periodo = quantidade_vendas_query.scalar() or 0
         print(f"Qtd Vendas (Periodo: {titulo_periodo}): {quantidade_vendas_periodo}")  # DEBUG PRINT
 
         # A RECEBER E ATRASADOS DO PERÍODO (usando data_venda como referência de origem)
         a_receber_condition = build_status_condition("a_receber")
-        total_a_receber_query = apply_date_filter(db.session.query(func.sum(Pedido.valor)), data_pagamento_ou_venda)
+        total_a_receber_query = apply_date_filter(
+            db.session.query(func.sum(Pedido.valor)), Pedido.data_venda
+        )
         if a_receber_condition is not None:
             total_a_receber_query = total_a_receber_query.filter(a_receber_condition)
-        total_a_receber_periodo = total_a_receber_query.filter(Pedido.data_vencimento >= datetime.utcnow()).scalar() or 0.0
+        total_a_receber_periodo = (
+            total_a_receber_query
+            .filter(Pedido.data_vencimento.isnot(None))
+            .filter(Pedido.data_vencimento >= inicio_do_dia_atual)
+            .scalar()
+            or 0.0
+        )
         print(f"A Receber (Periodo: {titulo_periodo}): {total_a_receber_periodo}")  # DEBUG PRINT
 
         atrasado_condition = build_status_condition("atrasado")
-        atrasado_ou_a_receber = None
+        atrasado_status_condition = None
         if a_receber_condition is not None and atrasado_condition is not None:
-            atrasado_ou_a_receber = or_(a_receber_condition, atrasado_condition)
+            atrasado_status_condition = or_(a_receber_condition, atrasado_condition)
         elif a_receber_condition is not None:
-            atrasado_ou_a_receber = a_receber_condition
+            atrasado_status_condition = a_receber_condition
         else:
-            atrasado_ou_a_receber = atrasado_condition
+            atrasado_status_condition = atrasado_condition
 
-        total_atrasado_query = apply_date_filter(db.session.query(func.sum(Pedido.valor)), data_pagamento_ou_venda)
-        if atrasado_ou_a_receber is not None:
-            total_atrasado_query = total_atrasado_query.filter(atrasado_ou_a_receber)
-        total_atrasado_periodo = total_atrasado_query.filter(Pedido.data_vencimento < datetime.utcnow()).scalar() or 0.0
+        total_atrasado_query = apply_date_filter(
+            db.session.query(func.sum(Pedido.valor)), Pedido.data_venda
+        )
+        if atrasado_status_condition is not None:
+            total_atrasado_query = total_atrasado_query.filter(atrasado_status_condition)
+        total_atrasado_periodo = (
+            total_atrasado_query
+            .filter(Pedido.data_vencimento.isnot(None))
+            .filter(Pedido.data_vencimento < inicio_do_dia_atual)
+            .scalar()
+            or 0.0
+        )
         print(f"Atrasado (Periodo: {titulo_periodo}): {total_atrasado_periodo}")  # DEBUG PRINT
 
         # KPIs DERIVADOS (USAM VALORES DO PERÍODO)
@@ -255,30 +282,113 @@ def dashboard():
             'projecao': total_pago_periodo + total_a_receber_periodo + total_agendado_global
         }
 
-        # Dados dos gráficos (PRECISAM SER RECALCULADOS COM A NOVA LÓGICA DE FILTRO)
-        grafico_data_base = apply_date_filter(
-            db.session.query(func.date(data_pagamento_ou_venda), func.sum(Pedido.valor)),
-            data_pagamento_ou_venda,
+        # Dados dos gráficos com filtros corretos por período
+        grafico_faturamento_query = apply_date_filter(
+            db.session.query(
+                func.date(Pedido.data_pagamento).label("dia"),
+                func.sum(Pedido.valor).label("total"),
+            ),
+            Pedido.data_pagamento,
         )
         if pago_condition is not None:
-            grafico_data_base = grafico_data_base.filter(pago_condition)
+            grafico_faturamento_query = grafico_faturamento_query.filter(pago_condition)
+        grafico_faturamento_query = grafico_faturamento_query.filter(Pedido.data_pagamento.isnot(None))
         grafico_faturamento_resultado = (
-            grafico_data_base.group_by(func.date(data_pagamento_ou_venda)).order_by(func.date(data_pagamento_ou_venda)).all()
+            grafico_faturamento_query.group_by("dia").order_by("dia").all()
         )
-        grafico_labels = [item[0].strftime('%d/%m') for item in grafico_faturamento_resultado] if grafico_faturamento_resultado else []
-        grafico_data = [float(item[1]) for item in grafico_faturamento_resultado] if grafico_faturamento_resultado else []
-        print(f"Grafico Faturamento Labels: {grafico_labels}")  # DEBUG PRINT
-        print(f"Grafico Faturamento Data: {grafico_data}")  # DEBUG PRINT
+        grafico_faturamento_labels = [
+            item.dia.strftime('%d/%m') if hasattr(item, 'dia') else item[0].strftime('%d/%m')
+            for item in grafico_faturamento_resultado
+        ]
+        grafico_faturamento_data = [
+            float(item.total if hasattr(item, 'total') else item[1])
+            for item in grafico_faturamento_resultado
+        ]
+        print(f"Grafico Faturamento Labels: {grafico_faturamento_labels}")  # DEBUG PRINT
+        print(f"Grafico Faturamento Data: {grafico_faturamento_data}")  # DEBUG PRINT
 
-        # ...(Calcular dados para os outros gráficos de forma similar, usando apply_date_filter)...
-        # Adicionar prints para os dados dos outros gráficos também
+        grafico_gastos_query = apply_date_filter(
+            db.session.query(
+                func.date(Gasto.data).label("dia"),
+                func.sum(Gasto.valor).label("total"),
+            ),
+            Gasto.data,
+        )
+        grafico_gastos_resultado = (
+            grafico_gastos_query.group_by("dia").order_by("dia").all()
+        )
+        grafico_gastos_labels = [
+            item.dia.strftime('%d/%m') if hasattr(item, 'dia') else item[0].strftime('%d/%m')
+            for item in grafico_gastos_resultado
+        ]
+        grafico_gastos_data = [
+            float(item.total if hasattr(item, 'total') else item[1])
+            for item in grafico_gastos_resultado
+        ]
+        print(f"Grafico Gastos Labels: {grafico_gastos_labels}")  # DEBUG PRINT
+        print(f"Grafico Gastos Data: {grafico_gastos_data}")  # DEBUG PRINT
+
+        categoria_label = func.coalesce(Gasto.categoria, 'Sem categoria')
+        grafico_categorias_query = apply_date_filter(
+            db.session.query(
+                categoria_label.label("categoria"),
+                func.sum(Gasto.valor).label("total"),
+            ),
+            Gasto.data,
+        )
+        grafico_categorias_resultado = (
+            grafico_categorias_query.group_by("categoria").order_by("categoria").all()
+        )
+        grafico_categorias_labels = [
+            item.categoria if hasattr(item, 'categoria') else item[0]
+            for item in grafico_categorias_resultado
+        ]
+        grafico_categorias_data = [
+            float(item.total if hasattr(item, 'total') else item[1])
+            for item in grafico_categorias_resultado
+        ]
+        print(f"Grafico Categorias Labels: {grafico_categorias_labels}")  # DEBUG PRINT
+        print(f"Grafico Categorias Data: {grafico_categorias_data}")  # DEBUG PRINT
+
+        metodo_pagamento_label = func.coalesce(Pedido.metodo_pagamento, 'Não informado')
+        grafico_pagamentos_query = apply_date_filter(
+            db.session.query(
+                metodo_pagamento_label.label("metodo"),
+                func.sum(Pedido.valor).label("total"),
+            ),
+            Pedido.data_pagamento,
+        )
+        if pago_condition is not None:
+            grafico_pagamentos_query = grafico_pagamentos_query.filter(pago_condition)
+        grafico_pagamentos_query = grafico_pagamentos_query.filter(Pedido.data_pagamento.isnot(None))
+        grafico_pagamentos_resultado = (
+            grafico_pagamentos_query.group_by("metodo").order_by("metodo").all()
+        )
+        grafico_pagamentos_labels = [
+            item.metodo if hasattr(item, 'metodo') else item[0]
+            for item in grafico_pagamentos_resultado
+        ]
+        grafico_pagamentos_data = [
+            float(item.total if hasattr(item, 'total') else item[1])
+            for item in grafico_pagamentos_resultado
+        ]
+        print(f"Grafico Pagamentos Labels: {grafico_pagamentos_labels}")  # DEBUG PRINT
+        print(f"Grafico Pagamentos Data: {grafico_pagamentos_data}")  # DEBUG PRINT
 
         context = {
             "pedidos": pedidos_da_pagina, "pagination": pagination, "resumo": resumo_dados,
             "periodo_selecionado": periodo_selecionado, "data_inicio": data_inicio_str, "data_fim": data_fim_str,
             "titulo_periodo": titulo_periodo,
-            "grafico_labels": grafico_labels, "grafico_data": grafico_data
-            # ... (passar dados dos outros gráficos para o template)
+            "grafico_labels": grafico_faturamento_labels,
+            "grafico_data": grafico_faturamento_data,
+            "grafico_faturamento_labels": grafico_faturamento_labels,
+            "grafico_faturamento_data": grafico_faturamento_data,
+            "grafico_gastos_labels": grafico_gastos_labels,
+            "grafico_gastos_data": grafico_gastos_data,
+            "grafico_categorias_labels": grafico_categorias_labels,
+            "grafico_categorias_data": grafico_categorias_data,
+            "grafico_pagamentos_labels": grafico_pagamentos_labels,
+            "grafico_pagamentos_data": grafico_pagamentos_data,
         }
 
         return render_template("dashboard.html", **context)

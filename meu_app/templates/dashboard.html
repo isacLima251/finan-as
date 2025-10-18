@@ -272,16 +272,101 @@
         try {
             const ctxFaturamento = document.getElementById('graficoFaturamento')?.getContext('2d');
             if (ctxFaturamento) {
-                const graficoLabels = {{ grafico_labels|tojson|safe }};
-                const graficoData = {{ grafico_data|tojson|safe }};
-                console.log("Dados Gráfico Faturamento:", graficoLabels, graficoData);
+                const graficoFaturamentoLabels = {{ grafico_faturamento_labels|tojson|safe }};
+                const graficoFaturamentoData = {{ grafico_faturamento_data|tojson|safe }};
+                console.log("Dados Gráfico Faturamento:", graficoFaturamentoLabels, graficoFaturamentoData);
                 new Chart(ctxFaturamento, {
-                    type: 'bar', data: { labels: graficoLabels, datasets: [{ label: 'Faturamento', data: graficoData, backgroundColor: 'rgba(54, 162, 235, 0.6)', borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 1 }] },
+                    type: 'bar',
+                    data: {
+                        labels: graficoFaturamentoLabels,
+                        datasets: [{
+                            label: 'Faturamento',
+                            data: graficoFaturamentoData,
+                            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
                     options: { scales: { y: { beginAtZero: true } }, responsive: true, maintainAspectRatio: false }
                 });
             } else { console.warn("Canvas #graficoFaturamento não encontrado."); }
 
-            // ... (Configuração similar para os outros gráficos, adicionando console.log e try/catch) ...
+            const ctxGastos = document.getElementById('graficoGastos')?.getContext('2d');
+            if (ctxGastos) {
+                const graficoGastosLabels = {{ grafico_gastos_labels|tojson|safe }};
+                const graficoGastosData = {{ grafico_gastos_data|tojson|safe }};
+                console.log("Dados Gráfico Gastos:", graficoGastosLabels, graficoGastosData);
+                new Chart(ctxGastos, {
+                    type: 'bar',
+                    data: {
+                        labels: graficoGastosLabels,
+                        datasets: [{
+                            label: 'Gastos',
+                            data: graficoGastosData,
+                            backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: { scales: { y: { beginAtZero: true } }, responsive: true, maintainAspectRatio: false }
+                });
+            } else { console.warn("Canvas #graficoGastos não encontrado."); }
+
+            const ctxCategorias = document.getElementById('graficoCategorias')?.getContext('2d');
+            if (ctxCategorias) {
+                const graficoCategoriasLabels = {{ grafico_categorias_labels|tojson|safe }};
+                const graficoCategoriasData = {{ grafico_categorias_data|tojson|safe }};
+                console.log("Dados Gráfico Categorias:", graficoCategoriasLabels, graficoCategoriasData);
+                new Chart(ctxCategorias, {
+                    type: 'doughnut',
+                    data: {
+                        labels: graficoCategoriasLabels,
+                        datasets: [{
+                            label: 'Gastos por Categoria',
+                            data: graficoCategoriasData,
+                            backgroundColor: graficoCategoriasLabels.map((_, index) => {
+                                const cores = [
+                                    'rgba(153, 102, 255, 0.6)',
+                                    'rgba(255, 159, 64, 0.6)',
+                                    'rgba(75, 192, 192, 0.6)',
+                                    'rgba(201, 203, 207, 0.6)',
+                                    'rgba(255, 205, 86, 0.6)'
+                                ];
+                                return cores[index % cores.length];
+                            })
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            } else { console.warn("Canvas #graficoCategorias não encontrado."); }
+
+            const ctxPagamentos = document.getElementById('graficoPagamentos')?.getContext('2d');
+            if (ctxPagamentos) {
+                const graficoPagamentosLabels = {{ grafico_pagamentos_labels|tojson|safe }};
+                const graficoPagamentosData = {{ grafico_pagamentos_data|tojson|safe }};
+                console.log("Dados Gráfico Pagamentos:", graficoPagamentosLabels, graficoPagamentosData);
+                new Chart(ctxPagamentos, {
+                    type: 'pie',
+                    data: {
+                        labels: graficoPagamentosLabels,
+                        datasets: [{
+                            label: 'Vendas por Pagamento',
+                            data: graficoPagamentosData,
+                            backgroundColor: graficoPagamentosLabels.map((_, index) => {
+                                const cores = [
+                                    'rgba(54, 162, 235, 0.6)',
+                                    'rgba(255, 99, 132, 0.6)',
+                                    'rgba(75, 192, 192, 0.6)',
+                                    'rgba(255, 205, 86, 0.6)',
+                                    'rgba(153, 102, 255, 0.6)'
+                                ];
+                                return cores[index % cores.length];
+                            })
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            } else { console.warn("Canvas #graficoPagamentos não encontrado."); }
         } catch(e) {
             console.error("Erro ao configurar gráficos:", e);
         }
